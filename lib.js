@@ -38,7 +38,7 @@ define(["d3"], function (d3) {
                         return { x: 0, y: 0, pass: false };
                     }
                     // runtime.checkNumber(y);
-                    // This is misleading because it states that xy-plo
+                    // This is misleading because it states that xy-plot
                     // consumes a Number, while it actually consumes a function.
                     // it is also inefficient as checking only once would
                     // be enough. One way to fix this is to sample some
@@ -129,6 +129,6 @@ define(["d3"], function (d3) {
     }
 
     return {
-        xy_plot: xy_plo
+        xy_plot: xy_plot
     };
 });
