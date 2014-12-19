@@ -29,7 +29,7 @@ define(["d3"], function (d3) {
             var inputScaler = d3.scale.linear()
                 .domain([0, sampleSize]).range([xMin, xMax]);
 
-            var data = d3.range(sampleSize).map(
+            var data = d3.range(sampleSize + 1).map(
                 function (i) {
                     var x = runtime.makeNumber(inputScaler(i)), y;
                     try {
@@ -110,16 +110,26 @@ define(["d3"], function (d3) {
                 .call(yAxis);
 
             data.forEach(
-                function (arr) { graph.append('path').attr("d", line(arr)); }
+                function (arr) {
+                    graph.append("path")
+                        .attr("class", "plotting")
+                        .attr("d", line(arr));
+                }
             );
 
             // CSS goes here
-            graph.selectAll('path').style(
-                {'stroke': 'black', 'stroke-width': 1, 'fill': 'none'});
-            graph.selectAll('.x.axis path').style(
-                {'stroke-width': xAxisConf.bold ? 3 : 0});
-            graph.selectAll('.y.axis path').style(
-                {'stroke-width': yAxisConf.bold ? 3 : 0});
+            console.log(graph.selectAll('.plotting').style(
+                {'stroke': 'blue', 'stroke-width': 1, 'fill': 'none'}));
+            graph.selectAll('.x.axis path').style({
+                'stroke': 'black',
+                'stroke-width': xAxisConf.bold ? 2 : 0,
+                'fill': 'none'
+            });
+            graph.selectAll('.y.axis path').style({
+                'stroke': 'black',
+                'stroke-width': yAxisConf.bold ? 2 : 0,
+                'fill': 'none'
+            });
             graph.selectAll('.axis').style({'shape-rendering': 'crispEdges'});
             graph.selectAll('.axis text').style({'font-size': '10px'});
             graph.selectAll('.axis line').style({'stroke': 'black'});
@@ -132,3 +142,4 @@ define(["d3"], function (d3) {
         xy_plot: xy_plot
     };
 });
+
