@@ -37,14 +37,6 @@ define(["d3"], function (d3) {
                     } catch (e) {
                         return { x: 0, y: 0, pass: false };
                     }
-                    // runtime.checkNumber(y);
-                    // This is misleading because it states that xy-plot
-                    // consumes a Number, while it actually consumes a function.
-                    // it is also inefficient as checking only once would
-                    // be enough. One way to fix this is to sample some
-                    // y and check if they are Number or not.
-                    // Sampling needs to tolerate some exceptions such as
-                    // Division by zero
                     return { x: x, y: y, pass: true };
                 }).reduce(
                     // Group data which are near each other together
@@ -118,8 +110,8 @@ define(["d3"], function (d3) {
             );
 
             // CSS goes here
-            console.log(graph.selectAll('.plotting').style(
-                {'stroke': 'blue', 'stroke-width': 1, 'fill': 'none'}));
+            graph.selectAll('.plotting').style(
+                {'stroke': 'blue', 'stroke-width': 1, 'fill': 'none'});
             graph.selectAll('.x.axis path').style({
                 'stroke': 'black',
                 'stroke-width': xAxisConf.bold ? 2 : 0,
@@ -142,4 +134,3 @@ define(["d3"], function (d3) {
         xy_plot: xy_plot
     };
 });
-
