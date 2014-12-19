@@ -25,12 +25,11 @@ Issues
 xy-plot
 -------
 
-1. What will happen if we try to plot "lam(x): (num-sqr(x) - 4) / (x - 2) end"?
-Should it make an error when encounter x = 2?
+1. Each window creates a lot of objects which is not destroyed when it is closed
 
-2. Each window creates a lot of objects which is not destroyed when it is closed
+2. Bignum? Irrational Number? Complex Number? How should we deal with these?
 
-3. Bignum? Irrational Number? Complex Number? How should we deal with these?
+3. How to check that the function returns a Number?
 
 Credit
 ======

@@ -13,7 +13,7 @@ define(["d3"], function (d3) {
             runtime.checkNumber(yMax);
 
             if ((xMin >= xMax) || (yMin >= yMax)) {
-                throw new Error("x-min and y-min must be strictly greater " +
+                throw new Error("x-min and y-min must be strictly less " +
                                 "than x-max and y-max respectively.");
             }
 
@@ -28,15 +28,24 @@ define(["d3"], function (d3) {
             var sampleSize = 1000;  // 1000 is enough to make the graph smooth
             var inputScaler = d3.scale.linear()
                 .domain([0, sampleSize]).range([xMin, xMax]);
+
             var data = d3.range(sampleSize).map(
                 function (i) {
                     var x = runtime.makeNumber(inputScaler(i)), y;
                     try {
                         y = f.app(x);
-                        return { x: x, y: y, pass: true };
-                    } catch (_) {
+                    } catch (e) {
                         return { x: 0, y: 0, pass: false };
                     }
+                    // runtime.checkNumber(y);
+                    // This is misleading because it states that xy-plo
+                    // consumes a Number, while it actually consumes a function.
+                    // it is also inefficient as checking only once would
+                    // be enough. One way to fix this is to sample some
+                    // y and check if they are Number or not.
+                    // Sampling needs to tolerate some exceptions such as
+                    // Division by zero
+                    return { x: x, y: y, pass: true };
                 }).reduce(
                     // Group data which are near each other together
                     function (arr, v) {
@@ -104,7 +113,7 @@ define(["d3"], function (d3) {
                 function (arr) { graph.append('path').attr("d", line(arr)); }
             );
 
-            // all CSS goes here
+            // CSS goes here
             graph.selectAll('path').style(
                 {'stroke': 'black', 'stroke-width': 1, 'fill': 'none'});
             graph.selectAll('.x.axis path').style(
@@ -120,6 +129,6 @@ define(["d3"], function (d3) {
     }
 
     return {
-        xy_plot: xy_plot
+        xy_plot: xy_plo
     };
 });
