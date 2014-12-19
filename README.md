@@ -17,7 +17,7 @@ Example
 xy-plot
 -------
 
-https://patch-experiment.herokuapp.com/editor#share=0Bxr4FfLa3goOckMxQ2duTGtNSnM&v=v0.5r763-test
+https://patch-experiment.herokuapp.com/editor#share=0Bxr4FfLa3goOb1pieksyNE1nV3c&v=v0.5r763-test
 
 Issues
 ======
