@@ -29,21 +29,24 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                 };
             }
 
+	    function isDiscontinuous(x1, x2) {
+		return false;
+	    }
+
             // These are adapted from http://jsfiddle.net/christopheviau/Hwpe3/
             var margin = {'top': 30, 'left': 50, 'bottom': 30, 'right': 50};
             var width = 500;
             var height = 500;
-            var tickX = 11;  // d3 will find the closest proper number of tick
+            var tickX = 11;
             var tickY = 21;
             var tickFormat = 'g';
-            var delta = 0.0001;
-            var threshold = 0.001;
             var inputScaler = scaler(0, width - 1, xMin, xMax);
             var outputScaler = scaler(yMin, yMax, height - 1, 0);
             var data = d3.range(width).reduce(
                 function (arr, i) {
                     // Group data which are near each other together
                     var x = inputScaler(i), y;
+		    var inner = arr[arr.length - 1];
                     try {
                         y = f.app(x);
                     } catch (e) {
@@ -55,21 +58,15 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                         arr.push([]);
                         return arr;
                     } else {
-                        /*
-                         var diff = f.app(x - runtime.makeNumber(delta)) - y;
-                         diff = runtime.num_abs(diff);
-                         console.log(x - runtime.makeNumber(delta));
-                         console.log(diff);
-                         if (diff > threshold) {
-                             arr.push([]);
-                         }
-                         // x is not at the edge! we can't do this!
-                         */
+			if (inner.length > 0 && isDiscontinuous(
+			    inputScaler(inner[inner.length - 1].x), x)) {
+			    arr.push([]);
+			}
                     }
-                    arr[arr.length - 1].push(
+                    inner.push(
                         { x: i, y: jsnums.toFixnum(outputScaler(y)) });
                     return arr;
-                }, [[]]).filter(function (d) { return d.length !== 0; });
+                }, [[]]).filter(function (d) { return d.length > 0; });
 
             function getAxisConf(aMin, aMax) {
                 var axisConf = {};
@@ -111,12 +108,10 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             yMin = jsnums.toFixnum(yMin);
             yMax = jsnums.toFixnum(yMax);
 
-            console.log(xMin);
-
             var xAxisScaler = d3.scale.linear()
                     .domain([xMin, xMax]).range([0, width - 1]);
             var yAxisScaler = d3.scale.linear()
-                    .domain([yMin, xMax]).range([height - 1, 0]);
+                    .domain([yMin, yMax]).range([height - 1, 0]);
 
             var xAxis = d3.svg.axis().scale(xAxisScaler)
                     .orient((xAxisConf.pos === 0) ? "top" : "bottom")
