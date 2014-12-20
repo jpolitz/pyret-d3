@@ -18,20 +18,21 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                                 "than x-max and y-max respectively.");
             }
 
-            function scaler(oldX, oldY, newX, newY) {
+            function scaler(oldX, oldY, newX, newY, toInt) {
                 return function (k) {
                     var oldDiff = jsnums.subtract(k, oldX);
                     var oldRange = jsnums.subtract(oldY, oldX);
                     var portion = jsnums.divide(oldDiff, oldRange);
                     var newRange = jsnums.subtract(newY, newX);
                     var newPortion = jsnums.multiply(portion, newRange);
-                    return jsnums.add(newPortion, newX);
+                    var result = jsnums.add(newPortion, newX);
+                    if (toInt) {
+                        return Math.floor(jsnums.toFixnum(result));
+                    } else {
+                        return result;
+                    }
                 };
             }
-
-	    function isDiscontinuous(x1, x2) {
-		return false;
-	    }
 
             // These are adapted from http://jsfiddle.net/christopheviau/Hwpe3/
             var margin = {'top': 30, 'left': 50, 'bottom': 30, 'right': 50};
@@ -40,13 +41,51 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             var tickX = 11;
             var tickY = 21;
             var tickFormat = 'g';
-            var inputScaler = scaler(0, width - 1, xMin, xMax);
-            var outputScaler = scaler(yMin, yMax, height - 1, 0);
+            var inputScaler = scaler(0, width - 1, xMin, xMax, false);
+            var outputScaler = scaler(yMin, yMax, height - 1, 0, false);
+            var xToPixel = scaler(xMin, xMax, 0, width - 1, true);
+            var yToPixel = scaler(yMin, yMax, height - 1, 0, true);
+            var delta = jsnums.divide(1, 10000000);
+
+            function fill(leftInit, rightInit) {
+                var ans = [];
+                var stack = []; // use stack instead of recursion
+                stack.push({left: leftInit, right: rightInit});
+                while (stack.length > 0) {
+                    var current = stack.pop();
+                    var xLeft = current.left;
+                    var xRight = current.right;
+                    // make delta relative to xMin and xMax
+                    if (jsnums.approxEquals(xLeft, xRight, delta)) {
+                        // step function will fail to show continuity
+                        // this if block must be put somewhere else
+                        // to record edge values
+                        continue;
+                    }
+                    var pixXLeft = xToPixel(xLeft);
+                    var pixXRight = xToPixel(xRight);
+                    var yLeft = fSafe(xLeft);
+                    var yRight = fSafe(xRight);
+                    var pixYLeft = yToPixel(yLeft);
+                    var pixYRight = yToPixel(yRight);
+                    ans.push({x: pixXLeft, y: pixYLeft});
+                    ans.push({x: pixYRight, y: pixYRight});
+                    var dPixX = pixXRight - pixXLeft;
+                    var dPixY = Math.abs(pixYLeft - pixYRight);
+                    if (dPixX <= 1 && dPixY <= 1) {
+                        continue;
+                    }
+                    var xMid = jsnums.divide(jsnums.add(xLeft, xRight), 2);
+                    stack.push({left: xLeft, right: xMid});
+                    stack.push({left: xMid, right: xRight});
+                }
+            }
+
             var data = d3.range(width).reduce(
                 function (arr, i) {
                     // Group data which are near each other together
                     var x = inputScaler(i), y;
-		    var inner = arr[arr.length - 1];
+                    var inner = arr[arr.length - 1];
                     try {
                         y = f.app(x);
                     } catch (e) {
@@ -58,10 +97,10 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                         arr.push([]);
                         return arr;
                     } else {
-			if (inner.length > 0 && isDiscontinuous(
-			    inputScaler(inner[inner.length - 1].x), x)) {
-			    arr.push([]);
-			}
+                        if (inner.length > 0) {
+                            //oldX = inputScaler(inner[inner.length - 1].x);
+                            // arr.push([]);
+                        }
                     }
                     inner.push(
                         { x: i, y: jsnums.toFixnum(outputScaler(y)) });
@@ -103,10 +142,11 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                         "transform",
                         "translate(" + margin.left + "," + margin.top + ")");
 
+            /*
             xMin = jsnums.toFixnum(xMin);
             xMax = jsnums.toFixnum(xMax);
             yMin = jsnums.toFixnum(yMin);
-            yMax = jsnums.toFixnum(yMax);
+            yMax = jsnums.toFixnum(yMax);*/
 
             var xAxisScaler = d3.scale.linear()
                     .domain([xMin, xMax]).range([0, width - 1]);
