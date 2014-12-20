@@ -41,71 +41,105 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             var tickX = 11;
             var tickY = 21;
             var tickFormat = 'g';
-            var inputScaler = scaler(0, width - 1, xMin, xMax, false);
-            var outputScaler = scaler(yMin, yMax, height - 1, 0, false);
+
             var xToPixel = scaler(xMin, xMax, 0, width - 1, true);
             var yToPixel = scaler(yMin, yMax, height - 1, 0, true);
-            var delta = jsnums.divide(1, 10000000);
+
+            var delta = jsnums.divide(
+                jsnums.subtract(xMax, xMin), jsnums.multiply(width, 100));
+
+            var INSERTLEFT = 0;
+            var INSERTRIGHT = 1;
 
             function fill(leftInit, rightInit) {
                 var ans = [];
                 var stack = []; // use stack instead of recursion
-                stack.push({left: leftInit, right: rightInit});
+                stack.push(
+                    {left: leftInit, right: rightInit, stage: INSERTLEFT});
                 while (stack.length > 0) {
                     var current = stack.pop();
                     var xLeft = current.left;
                     var xRight = current.right;
-                    // make delta relative to xMin and xMax
-                    if (jsnums.approxEquals(xLeft, xRight, delta)) {
-                        // step function will fail to show continuity
-                        // this if block must be put somewhere else
-                        // to record edge values
-                        continue;
-                    }
-                    var pixXLeft = xToPixel(xLeft);
-                    var pixXRight = xToPixel(xRight);
-                    var yLeft = fSafe(xLeft);
-                    var yRight = fSafe(xRight);
-                    var pixYLeft = yToPixel(yLeft);
-                    var pixYRight = yToPixel(yRight);
-                    ans.push({x: pixXLeft, y: pixYLeft});
-                    ans.push({x: pixYRight, y: pixYRight});
-                    var dPixX = pixXRight - pixXLeft;
-                    var dPixY = Math.abs(pixYLeft - pixYRight);
-                    if (dPixX <= 1 && dPixY <= 1) {
-                        continue;
-                    }
-                    var xMid = jsnums.divide(jsnums.add(xLeft, xRight), 2);
-                    stack.push({left: xLeft, right: xMid});
-                    stack.push({left: xMid, right: xRight});
-                }
-            }
+                    var stage = current.stage;
 
-            var data = d3.range(width).reduce(
-                function (arr, i) {
-                    // Group data which are near each other together
-                    var x = inputScaler(i), y;
-                    var inner = arr[arr.length - 1];
+                    var pixXRight = xToPixel(xRight);
+                    var yRight, pixYRight;
+
                     try {
-                        y = f.app(x);
+                        yRight = f.app(xRight);
+                        pixYRight = yToPixel(yRight);
                     } catch (e) {
-                        arr.push([]);
-                        return arr;
+                        yRight = NaN;
+                        pixYRight = NaN;
                     }
-                    if (jsnums.greaterThan(yMin, y) ||
-                        jsnums.greaterThan(y, yMax)) {
-                        arr.push([]);
-                        return arr;
-                    } else {
-                        if (inner.length > 0) {
-                            //oldX = inputScaler(inner[inner.length - 1].x);
-                            // arr.push([]);
+
+                    if (stage == INSERTLEFT) {
+                        var pixXLeft = xToPixel(xLeft);
+                        // we use ok as a flag instead of using results from pix
+                        // which are unreliable
+                        var ok = true;
+
+                        try {
+                            yLeft = f.app(xLeft);
+                            pixYLeft = yToPixel(yLeft);
+                        } catch (e) {
+                            yLeft = NaN;
+                            pixYLeft = NaN;
                         }
+
+                        if (yLeft !== NaN &&
+                            jsnums.lessThanOrEqual(yMin, yLeft) &&
+                            jsnums.lessThanOrEqual(yLeft, yMax)) {
+                            ans.push({x: pixXLeft, y: pixYLeft});
+                        } else {
+                            ok = false;
+                        }
+                        if (yRight !== NaN &&
+                            jsnums.lessThanOrEqual(yMin, yRight) &&
+                            jsnums.lessThanOrEqual(yRight, yMax)) {
+                            stack.push(
+                                {left: xLeft, right: xRight, stage: INSERTRIGHT}
+                            );
+                        } else {
+                            ok = false;
+                        }
+                        if (jsnums.approxEquals(xLeft, xRight, delta)) {
+                            continue;
+                        } else if (ok) {
+                            var dPixX = pixXRight - pixXLeft;
+                            var dPixY = Math.abs(pixYRight - pixYLeft);
+                            if (dPixX <= 1 && dPixY <= 1) {
+                                continue;
+                            }
+                        }
+
+                        var xMid = jsnums.divide(jsnums.add(xLeft, xRight), 2);
+                        stack.push(
+                            {left: xMid, right: xRight, stage: INSERTLEFT});
+                        stack.push(
+                            {left: xLeft, right: xMid, stage: INSERTLEFT});
+                    } else if (stage == INSERTRIGHT) {
+                        ans.push({x: pixXRight, y: pixYRight});
                     }
-                    inner.push(
-                        { x: i, y: jsnums.toFixnum(outputScaler(y)) });
-                    return arr;
-                }, [[]]).filter(function (d) { return d.length > 0; });
+                }
+                return ans;
+            }
+            var arr = fill(xMin, xMax);
+            var data = arr.filter(function(item, pos){
+                return ((pos === 0) ||
+                    (item.x !== arr[pos - 1].x) ||
+                    (item.y !== arr[pos - 1].y));
+            }).reduce(function(arr, d){
+                var inner = arr[arr.length - 1];
+                if (inner.length > 0) {
+                    var prev = inner[inner.length - 1];
+                    if ((Math.abs(d.y - prev.y) > 1) || ((d.x - prev.x) > 1)) {
+                        arr.push([]);
+                    }
+                }
+                arr[arr.length - 1].push(d);
+                return arr;
+            }, [[]]).filter(function (d) { return d.length > 0; });
 
             function getAxisConf(aMin, aMax) {
                 var axisConf = {};
@@ -206,3 +240,4 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         xy_plot: xy_plot
     };
 });
+
