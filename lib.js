@@ -20,7 +20,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
     }
 
     function xy_plot_meta(
-        runtime, f, xMin, xMax, yMin, yMax, data, width, height) {
+        runtime, f, xMin, xMax, yMin, yMax, getDataFunc, width, height) {
 
         // These are adapted from http://jsfiddle.net/christopheviau/Hwpe3/
         var margin = {'top': 30, 'left': 50, 'bottom': 30, 'right': 50};
@@ -93,7 +93,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                 "translate(" + yAxisConf.pos * (width - 1) + ", 0)")
             .call(yAxis);
 
-        data.forEach(
+        getDataFunc(f, xMin, xMax, yMin, yMax, width, height).forEach(
             function (arr) {
                 graph.append("path")
                     .attr("class", "plotting")
@@ -121,6 +121,141 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         runtime.getParam("current-animation-port")(detached.node());
     }
 
+    function getDataCont(f, xMin, xMax, yMin, yMax, width, height) {
+        var inputScaler = scaler(0, width - 1, xMin, xMax, false);
+        var outputScaler = scaler(yMin, yMax, height - 1, 0, false);
+        return d3.range(width).reduce(
+            function (arr, i) {
+                // Group data which are near each other together
+                var x = inputScaler(i), y;
+                var inner = arr[arr.length - 1];
+                try {
+                    y = f.app(x);
+                } catch (e) {
+                    arr.push([]);
+                    return arr;
+                }
+                if (jsnums.greaterThan(yMin, y) ||
+                    jsnums.greaterThan(y, yMax)) {
+                    arr.push([]);
+                    return arr;
+                }
+                inner.push(
+                    { x: i, y: jsnums.toFixnum(outputScaler(y)) }
+                );
+                return arr;
+            }, [[]]).filter(function (d) { return d.length > 0; });
+    }
+
+    function getDataGeneric(f, xMin, xMax, yMin, yMax, width, height) {
+        var inputScaler = scaler(0, width - 1, xMin, xMax, false);
+        var xToPixel = scaler(xMin, xMax, 0, width - 1, true);
+        var yToPixel = scaler(yMin, yMax, height - 1, 0, true);
+
+        var delta = jsnums.divide(
+            jsnums.subtract(xMax, xMin), jsnums.multiply(width, 1000));
+
+        var INSERTLEFT = 0;
+        var INSERTRIGHT = 1;
+
+        var data = [];
+
+        var roughData = getDataCont(f, xMin, xMax, yMin, yMax, width, height);
+        var stackInit = roughData.map(function (d) {
+            return {
+                left: inputScaler(d[0].x),
+                right: inputScaler(d[d.length - 1].x),
+                stage: INSERTLEFT
+            };
+        });
+
+        // use stack instead of recursion
+        var stack = stackInit;
+
+        while (stack.length > 0) {
+            var current = stack.pop();
+            var xLeft = current.left;
+            var xRight = current.right;
+            var stage = current.stage;
+
+            var pixXRight = xToPixel(xRight);
+            var yRight, pixYRight;
+
+            try {
+                yRight = f.app(xRight);
+                pixYRight = yToPixel(yRight);
+            } catch (e) {
+                yRight = NaN;
+                pixYRight = NaN;
+            }
+
+            if (stage == INSERTLEFT) {
+                var pixXLeft = xToPixel(xLeft);
+                var yLeft, pixYLeft;
+
+                try {
+                    yLeft = f.app(xLeft);
+                    pixYLeft = yToPixel(yLeft);
+                } catch (e) {
+                    yLeft = NaN;
+                    pixYLeft = NaN;
+                }
+
+                // we use ok as a flag instead of using results from pix
+                // which are unreliable
+                var ok = true;
+
+                if (yLeft !== NaN &&
+                    jsnums.lessThanOrEqual(yMin, yLeft) &&
+                    jsnums.lessThanOrEqual(yLeft, yMax)) {
+                    data.push({x: pixXLeft, y: pixYLeft});
+                } else {
+                    ok = false;
+                }
+                if (yRight !== NaN &&
+                    jsnums.lessThanOrEqual(yMin, yRight) &&
+                    jsnums.lessThanOrEqual(yRight, yMax)) {
+                    stack.push(
+                        {left: xLeft, right: xRight, stage: INSERTRIGHT}
+                    );
+                } else {
+                    ok = false;
+                }
+                if (jsnums.approxEquals(xLeft, xRight, delta)) {
+                    continue;
+                } else if (ok) {
+                    var dPixX = pixXRight - pixXLeft;
+                    var dPixY = Math.abs(pixYRight - pixYLeft);
+                    if (dPixX <= 1 && dPixY <= 1) {
+                        continue;
+                    }
+                }
+
+                var xMid = jsnums.divide(jsnums.add(xLeft, xRight), 2);
+                stack.push({left: xMid, right: xRight, stage: INSERTLEFT});
+                stack.push({left: xLeft, right: xMid, stage: INSERTLEFT});
+            } else if (stage == INSERTRIGHT) {
+                data.push({x: pixXRight, y: pixYRight});
+            }
+        }
+
+        return data.filter(function(item, pos){
+            return ((pos === 0) ||
+                    (item.x !== data[pos - 1].x) ||
+                    (item.y !== data[pos - 1].y));
+        }).reduce(function(arr, d){
+            var inner = arr[arr.length - 1];
+            if (inner.length > 0) {
+                var prev = inner[inner.length - 1];
+                if ((Math.abs(d.y - prev.y) > 1) || ((d.x - prev.x) > 1)) {
+                    arr.push([]);
+                }
+            }
+            arr[arr.length - 1].push(d);
+            return arr;
+        }, [[]]).filter(function (d) { return d.length > 0; });
+    }
+
     function xy_plot(runtime) {
         return function (f, xMin, xMax, yMin, yMax) {
             runtime.checkArity(5, arguments, "xy-plot");
@@ -138,103 +273,10 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
 
             var width = 500;
             var height = 500;
-            var xToPixel = scaler(xMin, xMax, 0, width - 1, true);
-            var yToPixel = scaler(yMin, yMax, height - 1, 0, true);
-
-            var delta = jsnums.divide(
-                jsnums.subtract(xMax, xMin), jsnums.multiply(width, 1000));
-
-            var INSERTLEFT = 0;
-            var INSERTRIGHT = 1;
-
-            var ans = [];
-            var stack = []; // use stack instead of recursion
-            stack.push({left: xMin, right: xMax, stage: INSERTLEFT});
-            while (stack.length > 0) {
-                var current = stack.pop();
-                var xLeft = current.left;
-                var xRight = current.right;
-                var stage = current.stage;
-
-                var pixXRight = xToPixel(xRight);
-                var yRight, pixYRight;
-
-                try {
-                    yRight = f.app(xRight);
-                    pixYRight = yToPixel(yRight);
-                } catch (e) {
-                    yRight = NaN;
-                    pixYRight = NaN;
-                }
-
-                if (stage == INSERTLEFT) {
-                    var pixXLeft = xToPixel(xLeft);
-                    var yLeft, pixYLeft;
-
-                    try {
-                        yLeft = f.app(xLeft);
-                        pixYLeft = yToPixel(yLeft);
-                    } catch (e) {
-                        yLeft = NaN;
-                        pixYLeft = NaN;
-                    }
-
-                    // we use ok as a flag instead of using results from pix
-                    // which are unreliable
-                    var ok = true;
-
-                    if (yLeft !== NaN &&
-                        jsnums.lessThanOrEqual(yMin, yLeft) &&
-                        jsnums.lessThanOrEqual(yLeft, yMax)) {
-                        ans.push({x: pixXLeft, y: pixYLeft});
-                    } else {
-                        ok = false;
-                    }
-                    if (yRight !== NaN &&
-                        jsnums.lessThanOrEqual(yMin, yRight) &&
-                        jsnums.lessThanOrEqual(yRight, yMax)) {
-                        stack.push(
-                            {left: xLeft, right: xRight, stage: INSERTRIGHT}
-                        );
-                    } else {
-                        ok = false;
-                    }
-                    if (jsnums.approxEquals(xLeft, xRight, delta)) {
-                        continue;
-                    } else if (ok) {
-                        var dPixX = pixXRight - pixXLeft;
-                        var dPixY = Math.abs(pixYRight - pixYLeft);
-                        if (dPixX <= 1 && dPixY <= 1) {
-                            continue;
-                        }
-                    }
-
-                    var xMid = jsnums.divide(jsnums.add(xLeft, xRight), 2);
-                    stack.push({left: xMid, right: xRight, stage: INSERTLEFT});
-                    stack.push({left: xLeft, right: xMid, stage: INSERTLEFT});
-                } else if (stage == INSERTRIGHT) {
-                    ans.push({x: pixXRight, y: pixYRight});
-                }
-            }
-
-            var data = ans.filter(function(item, pos){
-                return ((pos === 0) ||
-                        (item.x !== ans[pos - 1].x) ||
-                        (item.y !== ans[pos - 1].y));
-            }).reduce(function(arr, d){
-                var inner = arr[arr.length - 1];
-                if (inner.length > 0) {
-                    var prev = inner[inner.length - 1];
-                    if ((Math.abs(d.y - prev.y) > 1) || ((d.x - prev.x) > 1)) {
-                        arr.push([]);
-                    }
-                }
-                arr[arr.length - 1].push(d);
-                return arr;
-            }, [[]]).filter(function (d) { return d.length > 0; });
 
             xy_plot_meta(
-                runtime, f, xMin, xMax, yMin, yMax, data, width, height);
+                runtime, f, xMin, xMax, yMin, yMax,
+                getDataGeneric, width, height);
         };
     }
 
@@ -256,32 +298,9 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             var width = 500;
             var height = 500;
 
-            var inputScaler = scaler(0, width - 1, xMin, xMax);
-            var outputScaler = scaler(yMin, yMax, height - 1, 0);
-            var data = d3.range(width).reduce(
-                function (arr, i) {
-                    // Group data which are near each other together
-                    var x = inputScaler(i), y;
-                    var inner = arr[arr.length - 1];
-                    try {
-                        y = f.app(x);
-                    } catch (e) {
-                        arr.push([]);
-                        return arr;
-                    }
-                    if (jsnums.greaterThan(yMin, y) ||
-                        jsnums.greaterThan(y, yMax)) {
-                        arr.push([]);
-                        return arr;
-                    }
-                    inner.push(
-                        { x: i, y: jsnums.toFixnum(outputScaler(y)) }
-                    );
-                    return arr;
-                }, [[]]).filter(function (d) { return d.length > 0; });
-
             xy_plot_meta(
-                runtime, f, xMin, xMax, yMin, yMax, data, width, height);
+                runtime, f, xMin, xMax, yMin, yMax,
+                getDataCont, width, height);
         };
     }
 
