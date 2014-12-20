@@ -18,18 +18,15 @@ define(["d3"], function (d3) {
             }
 
             // These are adapted from http://jsfiddle.net/christopheviau/Hwpe3/
-
             var margin = {'top': 30, 'left': 50, 'bottom': 30, 'right': 50};
-            var width = 500 - margin.left - margin.right;
-            var height = 500 - margin.top - margin.bottom;
+            var width = 500;
+            var height = 500;
             var tickX = 11;  // d3 will find the closest proper number of tick
             var tickY = 21;
             var tickFormat = 'g';
-            var sampleSize = 1000;  // 1000 is enough to make the graph smooth
             var inputScaler = d3.scale.linear()
-                .domain([0, sampleSize]).range([xMin, xMax]);
-
-            var data = d3.range(sampleSize + 1).map(
+                .domain([0, width - 1]).range([xMin, xMax]);
+            var data = d3.range(width).map(
                 function (i) {
                     var x = runtime.makeNumber(inputScaler(i)), y;
                     try {
@@ -47,7 +44,7 @@ define(["d3"], function (d3) {
                             arr.push([]);
                         }
                         return arr;
-                    }, [[]]);
+                    }, [[]]).filter(function (d) { return d.length !== 0; });
 
             function getAxisConf(aMin, aMax) {
                 var axisConf = {};
