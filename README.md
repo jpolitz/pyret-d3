@@ -17,9 +17,9 @@ Arguments are:
 xy-plot-cont
 ------------
 
-This function plots a graph. It is very fast and renders smoothly. However,
+This function plots a graph. It is very fast. However,
 it assumes that the plotting graph is continuous and therefore will show
-stange behavior such as showing vertical bar in step function
+stange behavior such as showing vertical bars in a step function
 
 Arguments are:
 

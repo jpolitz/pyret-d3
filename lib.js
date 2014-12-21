@@ -65,6 +65,11 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                     "transform",
                     "translate(" + margin.left + "," + margin.top + ")");
 
+        xMin = jsnums.toFixnum(xMin);
+        xMax = jsnums.toFixnum(xMax);
+        yMin = jsnums.toFixnum(yMin);
+        yMax = jsnums.toFixnum(yMax);
+
         var xAxisScaler = d3.scale.linear()
                 .domain([xMin, xMax]).range([0, width - 1]);
         var yAxisScaler = d3.scale.linear()
