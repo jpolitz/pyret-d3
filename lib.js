@@ -19,6 +19,16 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         };
     }
 
+    function adjustInRange(k, vmin, vmax) {
+        if (jsnums.lessThan(k, vmin)) {
+            return vmin;
+        } else if (jsnums.lessThan(vmax, k)) {
+            return vmax;
+        } else {
+            return k;
+        }
+    }
+
     function xy_plot_meta(
         runtime, f, xMin, xMax, yMin, yMax, getDataFunc, width, height) {
 
@@ -124,7 +134,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             .attr("y2", (1 - xAxisConf.pos) * (height - 1));
         graph.selectAll('.axis').style({'shape-rendering': 'crispEdges'});
         graph.selectAll('.axis text').style({'font-size': '10px'});
-        graph.selectAll('.axis line').style({'stroke': 'lightgray'});
+        graph.selectAll('.axis line').style({'stroke': 'lightgray', 'opacity': 0.6});
 
         runtime.getParam("current-animation-port")(detached.node());
     }
@@ -132,36 +142,42 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
     function getDataCont(f, xMin, xMax, yMin, yMax, width, height) {
         var inputScaler = scaler(0, width - 1, xMin, xMax, false),
             outputScaler = scaler(yMin, yMax, height - 1, 0, false);
-        return d3.range(width).reduce(
-            function (arr, i) {
-                // Group data which are near each other together
-                var x = inputScaler(i), y;
-                var inner = arr[arr.length - 1];
-                try {
-                    y = f.app(x);
-                } catch (e) {
-                    arr.push([]);
-                    return arr;
-                }
-                try {
-                    if (Number.isNaN(jsnums.toFixnum(y))) {
-                        arr.push([]);
-                        return arr;
-                    }
-                } catch (e) {
-                    arr.push([]);
-                    return arr;
-                }
-                if (jsnums.greaterThan(yMin, y) ||
-                    jsnums.greaterThan(y, yMax)) {
-                    arr.push([]);
-                    return arr;
-                }
-                inner.push(
-                    { x: i, y: jsnums.toFixnum(outputScaler(y)) }
-                );
+
+        function draw(arr, i) {
+            // Group data which are near each other together
+            var x = inputScaler(i), y;
+            var inner = arr[arr.length - 1];
+            try {
+                y = f.app(x);
+            } catch (e) {
+                arr.push([]);
                 return arr;
-            }, [[]]).filter(function (d) { return d.length > 0; });
+            }
+            try {
+                if (Number.isNaN(jsnums.toFixnum(y))) {
+                    arr.push([]);
+                    return arr;
+                }
+            } catch (e) {
+                arr.push([]);
+                return arr;
+            }
+            var possibleY = adjustInRange(y, yMin, yMax);
+            if (possibleY !== y) {
+                inner.push({
+                    x: i,
+                    y: jsnums.toFixnum(outputScaler(possibleY))
+                });
+                arr.push([]);
+                return arr;
+            }
+            inner.push({ x: i, y: jsnums.toFixnum(outputScaler(y)) });
+            return arr;
+        };
+
+        return d3.merge([d3.range(width), d3.range(width).reverse()])
+            .reduce(draw, [[]])
+            .filter(function (d) { return d.length > 1; });
     }
 
     function getDataGeneric(f, xMin, xMax, yMin, yMax, width, height) {
@@ -197,7 +213,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             var pixXRight = xToPixel(xRight), yRight, pixYRight;
 
             try {
-                yRight = f.app(xRight);
+                yRight = adjustInRange(f.app(xRight), yMin, yMax);
                 pixYRight = yToPixel(yRight);
             } catch (e) {
                 yRight = NaN;
@@ -208,7 +224,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                 var pixXLeft = xToPixel(xLeft), yLeft, pixYLeft;
 
                 try {
-                    yLeft = f.app(xLeft);
+                    yLeft = adjustInRange(f.app(xLeft), yMin, yMax);
                     pixYLeft = yToPixel(yLeft);
                 } catch (e) {
                     yLeft = NaN;
@@ -218,16 +234,12 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                 // which are unreliable
                 var ok = true;
 
-                if (!(Number.isNaN(yLeft)) &&
-                    jsnums.lessThanOrEqual(yMin, yLeft) &&
-                    jsnums.lessThanOrEqual(yLeft, yMax)) {
+                if (!Number.isNaN(yLeft)) {
                     data.push({x: pixXLeft, y: pixYLeft});
                 } else {
                     ok = false;
                 }
-                if (!(Number.isNaN(yRight)) &&
-                    jsnums.lessThanOrEqual(yMin, yRight) &&
-                    jsnums.lessThanOrEqual(yRight, yMax)) {
+                if (!Number.isNaN(yRight)) {
                     stack.push(
                         {left: xLeft, right: xRight, stage: INSERTRIGHT}
                     );
@@ -266,7 +278,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             }
             arr[arr.length - 1].push(d);
             return arr;
-        }, [[]]).filter(function (d) { return d.length > 0; });
+        }, [[]]).filter(function (d) { return d.length > 1; });
 
         var intervals = newData.map(
             function (interval) {
@@ -298,7 +310,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                     }
                 }
                 return arr;
-            }, [[]]).filter(function (d) { return d.length > 0; });
+            }, [[]]).filter(function (d) { return d.length > 1; });
     }
 
     function xy_plot(runtime) {
