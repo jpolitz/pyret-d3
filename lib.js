@@ -234,11 +234,12 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             }
         }
 
-        return data.filter(function(item, pos){
+        // NOTE: foldr to follow the order properly
+        var newData = data.filter(function(item, pos){
             return ((pos === 0) ||
                     (item.x !== data[pos - 1].x) ||
                     (item.y !== data[pos - 1].y));
-        }).reduce(function(arr, d){
+        }).reduceRight(function(arr, d){
             var inner = arr[arr.length - 1];
             if (inner.length > 0) {
                 var prev = inner[inner.length - 1];
@@ -250,6 +251,18 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             arr[arr.length - 1].push(d);
             return arr;
         }, [[]]).filter(function (d) { return d.length > 0; });
+
+        // NOTE: foldl to follow the order properly
+        var flattened = roughData.reduce(
+            function(arr, d){
+                d.forEach(function(x){ arr.push(x); });
+                return arr;
+            }
+        , []);
+
+        // filter flattened by using newData
+
+        return newData;
     }
 
     function xy_plot(runtime) {

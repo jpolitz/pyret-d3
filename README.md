@@ -4,8 +4,7 @@ Usage
 xy-plot
 -------
 
-This function plots a graph. It is slow and might not be rendered properly
-for some graphs.
+This function plots a graph. It is slow and might not render the graph properly.
 
 Arguments are:
 
@@ -33,8 +32,8 @@ Arguments are:
 Example
 =======
 
-xy-plot
--------
+xy-plot & xy-ploy-cont
+----------------------
 
 https://patch-experiment.herokuapp.com/editor#share=0Bxr4FfLa3goOWlVUMXJjcS1Qd2s&v=v0.5r763-test
 
