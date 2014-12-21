@@ -164,7 +164,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                 right: inputScaler(d[d.length - 1].x),
                 stage: INSERTLEFT
             };
-        });
+        }).reverse();
 
         // use stack instead of recursion
         var stack = stackInit;
@@ -234,12 +234,11 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             }
         }
 
-        // NOTE: foldr to follow the order properly
         var newData = data.filter(function(item, pos){
             return ((pos === 0) ||
                     (item.x !== data[pos - 1].x) ||
                     (item.y !== data[pos - 1].y));
-        }).reduceRight(function(arr, d){
+        }).reduce(function(arr, d){
             var inner = arr[arr.length - 1];
             if (inner.length > 0) {
                 var prev = inner[inner.length - 1];
@@ -252,17 +251,37 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             return arr;
         }, [[]]).filter(function (d) { return d.length > 0; });
 
-        // NOTE: foldl to follow the order properly
+        var intervals = newData.map(
+            function (interval) {
+                return {
+                    left: interval[0].x,
+                    right: interval[interval.length - 1].x
+                };
+            });
+
         var flattened = roughData.reduce(
-            function(arr, d){
-                d.forEach(function(x){ arr.push(x); });
+            function(arr, innerArray){
+                innerArray.forEach(function (d){ arr.push(d); });
                 return arr;
-            }
-        , []);
+            }, []);
 
-        // filter flattened by using newData
+        var group = 0;
 
-        return newData;
+        return flattened.reduce(
+            function (arr, item) {
+                while ((group < intervals.length) &&
+                       (intervals[group].right < item.x)) {
+                    group++;
+                    arr.push([]);
+                }
+                if (group < intervals.length) {
+                    if ((intervals[group].left <= item.x) &&
+                        (item.x <= intervals[group].right)) {
+                        arr[arr.length - 1].push(item);
+                    }
+                }
+                return arr;
+            }, [[]]).filter(function (d) { return d.length > 0; });
     }
 
     function xy_plot(runtime) {
