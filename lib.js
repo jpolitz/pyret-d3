@@ -25,10 +25,9 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         var data = getDataFunc(f, xMin, xMax, yMin, yMax, width, height);
 
         // These are adapted from http://jsfiddle.net/christopheviau/Hwpe3/
-        var margin = {'top': 30, 'left': 50, 'bottom': 30, 'right': 50};
-        var tickX = 11;
-        var tickY = 21;
-        var tickFormat = 'g';
+        var margin = {'top': 30, 'left': 50, 'bottom': 30, 'right': 50},
+            tickX = 11, tickY = 21,
+            tickFormat = 'g';
 
         function getAxisConf(aMin, aMax) {
             var axisConf = {};
@@ -48,16 +47,16 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             return axisConf;
         }
 
-        var xAxisConf = getAxisConf(yMin, yMax);
-        var yAxisConf = getAxisConf(xMin, xMax);
+        var xAxisConf = getAxisConf(yMin, yMax),
+            yAxisConf = getAxisConf(xMin, xMax);
         xAxisConf.pos = 1 - xAxisConf.pos;
 
         var line = d3.svg.line()
                 .x(function (d) { return d.x; })
                 .y(function (d) { return d.y; });
 
-        var detached = d3.select(document.createElement("div"));
-        var graph = detached.append("svg")
+        var detached = d3.select(document.createElement("div")),
+            graph = detached.append("svg")
                 .attr("width", width + margin.left + margin.right)
                 .attr("height", height + margin.top + margin.bottom)
                 .append("g")
@@ -71,8 +70,8 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         yMax = jsnums.toFixnum(yMax);
 
         var xAxisScaler = d3.scale.linear()
-                .domain([xMin, xMax]).range([0, width - 1]);
-        var yAxisScaler = d3.scale.linear()
+                .domain([xMin, xMax]).range([0, width - 1]),
+            yAxisScaler = d3.scale.linear()
                 .domain([yMin, yMax]).range([height - 1, 0]);
 
         var xAxis = d3.svg.axis().scale(xAxisScaler)
@@ -104,6 +103,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         );
 
         // CSS goes here
+
         graph.selectAll('.plotting').style(
             {'stroke': 'blue', 'stroke-width': 1, 'fill': 'none'});
         graph.selectAll('.x.axis path').style({
@@ -116,16 +116,22 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             'stroke-width': yAxisConf.bold ? 2 : 0,
             'fill': 'none'
         });
+        graph.selectAll("g.y.axis g.tick line")
+            .attr("x1", -yAxisConf.pos * (width - 1))
+            .attr("x2", (1 - yAxisConf.pos) * (width - 1));
+        graph.selectAll("g.x.axis g.tick line")
+            .attr("y1", -xAxisConf.pos * (height - 1))
+            .attr("y2", (1 - xAxisConf.pos) * (height - 1));
         graph.selectAll('.axis').style({'shape-rendering': 'crispEdges'});
         graph.selectAll('.axis text').style({'font-size': '10px'});
-        graph.selectAll('.axis line').style({'stroke': 'black'});
+        graph.selectAll('.axis line').style({'stroke': 'lightgray'});
 
         runtime.getParam("current-animation-port")(detached.node());
     }
 
     function getDataCont(f, xMin, xMax, yMin, yMax, width, height) {
-        var inputScaler = scaler(0, width - 1, xMin, xMax, false);
-        var outputScaler = scaler(yMin, yMax, height - 1, 0, false);
+        var inputScaler = scaler(0, width - 1, xMin, xMax, false),
+            outputScaler = scaler(yMin, yMax, height - 1, 0, false);
         return d3.range(width).reduce(
             function (arr, i) {
                 // Group data which are near each other together
@@ -133,6 +139,15 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                 var inner = arr[arr.length - 1];
                 try {
                     y = f.app(x);
+                } catch (e) {
+                    arr.push([]);
+                    return arr;
+                }
+                try {
+                    if (Number.isNaN(jsnums.toFixnum(y))) {
+                        arr.push([]);
+                        return arr;
+                    }
                 } catch (e) {
                     arr.push([]);
                     return arr;
@@ -150,17 +165,16 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
     }
 
     function getDataGeneric(f, xMin, xMax, yMin, yMax, width, height) {
-        var inputScaler = scaler(0, width - 1, xMin, xMax, false);
-        var xToPixel = scaler(xMin, xMax, 0, width - 1, true);
-        var yToPixel = scaler(yMin, yMax, height - 1, 0, true);
+        var inputScaler = scaler(0, width - 1, xMin, xMax, false),
+            xToPixel = scaler(xMin, xMax, 0, width - 1, true),
+            yToPixel = scaler(yMin, yMax, height - 1, 0, true),
+            delta = jsnums.divide(
+                jsnums.subtract(xMax, xMin),
+                jsnums.multiply(width, 1000));
 
-        var delta = jsnums.divide(
-            jsnums.subtract(xMax, xMin), jsnums.multiply(width, 1000));
-
-        var INSERTLEFT = 0;
-        var INSERTRIGHT = 1;
-        var dyTolerate = 1;
-        var data = [];
+        var INSERTLEFT = 0, INSERTRIGHT = 1,
+            dyTolerate = 1,
+            data = [];
 
         var roughData = getDataCont(f, xMin, xMax, yMin, yMax, width, height);
         var stackInit = roughData.map(function (d) {
@@ -176,12 +190,11 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
 
         while (stack.length > 0) {
             var current = stack.pop();
-            var xLeft = current.left;
-            var xRight = current.right;
-            var stage = current.stage;
+            var xLeft = current.left,
+                xRight = current.right,
+                stage = current.stage;
 
-            var pixXRight = xToPixel(xRight);
-            var yRight, pixYRight;
+            var pixXRight = xToPixel(xRight), yRight, pixYRight;
 
             try {
                 yRight = f.app(xRight);
@@ -192,8 +205,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             }
 
             if (stage == INSERTLEFT) {
-                var pixXLeft = xToPixel(xLeft);
-                var yLeft, pixYLeft;
+                var pixXLeft = xToPixel(xLeft), yLeft, pixYLeft;
 
                 try {
                     yLeft = f.app(xLeft);
@@ -206,14 +218,14 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                 // which are unreliable
                 var ok = true;
 
-                if (yLeft !== NaN &&
+                if (!(Number.isNaN(yLeft)) &&
                     jsnums.lessThanOrEqual(yMin, yLeft) &&
                     jsnums.lessThanOrEqual(yLeft, yMax)) {
                     data.push({x: pixXLeft, y: pixYLeft});
                 } else {
                     ok = false;
                 }
-                if (yRight !== NaN &&
+                if (!(Number.isNaN(yRight)) &&
                     jsnums.lessThanOrEqual(yMin, yRight) &&
                     jsnums.lessThanOrEqual(yRight, yMax)) {
                     stack.push(
@@ -225,8 +237,8 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                 if (jsnums.approxEquals(xLeft, xRight, delta)) {
                     continue;
                 } else if (ok) {
-                    var dPixX = pixXRight - pixXLeft;
-                    var dPixY = Math.abs(pixYRight - pixYLeft);
+                    var dPixX = pixXRight - pixXLeft,
+                        dPixY = Math.abs(pixYRight - pixYLeft);
                     if (dPixX <= 1 && dPixY <= dyTolerate) {
                         continue;
                     }
@@ -304,8 +316,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                                 "than x-max and y-max respectively.");
             }
 
-            var width = 500;
-            var height = 500;
+            var width = 500, height = 500;
 
             xy_plot_meta(
                 runtime, f, xMin, xMax, yMin, yMax,
@@ -328,8 +339,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                                 "than x-max and y-max respectively.");
             }
 
-            var width = 500;
-            var height = 500;
+            var width = 500, height = 500;
 
             xy_plot_meta(
                 runtime, f, xMin, xMax, yMin, yMax,
@@ -339,12 +349,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
 
     function test(runtime) {
         return function(x, y){
-            var width = 500;
-            var inputScaler = scaler(0, width - 1, x, y, true);
-            console.log(y, x, width, 1000);
-            var delta = jsnums.divide(
-                jsnums.subtract(y, x), jsnums.multiply(width, 1000));
-            console.log(delta);
+            console.log(jsnums.greaterThan(x, y));
         };
     }
 
