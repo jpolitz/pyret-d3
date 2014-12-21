@@ -22,6 +22,8 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
     function xy_plot_meta(
         runtime, f, xMin, xMax, yMin, yMax, getDataFunc, width, height) {
 
+        var data = getDataFunc(f, xMin, xMax, yMin, yMax, width, height);
+
         // These are adapted from http://jsfiddle.net/christopheviau/Hwpe3/
         var margin = {'top': 30, 'left': 50, 'bottom': 30, 'right': 50};
         var tickX = 11;
@@ -63,11 +65,6 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                     "transform",
                     "translate(" + margin.left + "," + margin.top + ")");
 
-         xMin = jsnums.toFixnum(xMin);
-         xMax = jsnums.toFixnum(xMax);
-         yMin = jsnums.toFixnum(yMin);
-         yMax = jsnums.toFixnum(yMax);
-
         var xAxisScaler = d3.scale.linear()
                 .domain([xMin, xMax]).range([0, width - 1]);
         var yAxisScaler = d3.scale.linear()
@@ -93,7 +90,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                 "translate(" + yAxisConf.pos * (width - 1) + ", 0)")
             .call(yAxis);
 
-        getDataFunc(f, xMin, xMax, yMin, yMax, width, height).forEach(
+        data.forEach(
             function (arr) {
                 graph.append("path")
                     .attr("class", "plotting")
@@ -157,7 +154,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
 
         var INSERTLEFT = 0;
         var INSERTRIGHT = 1;
-
+        var dyTolerate = 1;
         var data = [];
 
         var roughData = getDataCont(f, xMin, xMax, yMin, yMax, width, height);
@@ -200,7 +197,6 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                     yLeft = NaN;
                     pixYLeft = NaN;
                 }
-
                 // we use ok as a flag instead of using results from pix
                 // which are unreliable
                 var ok = true;
@@ -226,11 +222,10 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                 } else if (ok) {
                     var dPixX = pixXRight - pixXLeft;
                     var dPixY = Math.abs(pixYRight - pixYLeft);
-                    if (dPixX <= 1 && dPixY <= 1) {
+                    if (dPixX <= 1 && dPixY <= dyTolerate) {
                         continue;
                     }
                 }
-
                 var xMid = jsnums.divide(jsnums.add(xLeft, xRight), 2);
                 stack.push({left: xMid, right: xRight, stage: INSERTLEFT});
                 stack.push({left: xLeft, right: xMid, stage: INSERTLEFT});
@@ -247,7 +242,8 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             var inner = arr[arr.length - 1];
             if (inner.length > 0) {
                 var prev = inner[inner.length - 1];
-                if ((Math.abs(d.y - prev.y) > 1) || ((d.x - prev.x) > 1)) {
+                if ((Math.abs(d.y - prev.y) > dyTolerate) ||
+                    ((d.x - prev.x) > 1)) {
                     arr.push([]);
                 }
             }
@@ -304,9 +300,21 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         };
     }
 
+    function test(runtime) {
+        return function(x, y){
+            var width = 500;
+            var inputScaler = scaler(0, width - 1, x, y, true);
+            console.log(y, x, width, 1000);
+            var delta = jsnums.divide(
+                jsnums.subtract(y, x), jsnums.multiply(width, 1000));
+            console.log(delta);
+        };
+    }
+
     return {
         xy_plot: xy_plot,
-        xy_plot_cont: xy_plot_cont
+        xy_plot_cont: xy_plot_cont,
+        test: test
     };
 });
 
