@@ -10,8 +10,8 @@ requirejs.undef("my-project/lib");
 define(["js/runtime-util", "my-project/lib"], function(util, lib) {
     return function(runtime, namespace) {
         return util.makeModuleReturn(runtime, {}, {
-            "xy-plot": runtime.makeFunction(lib.xy_plot(runtime)),
-            "xy-plot-cont": runtime.makeFunction(lib.xy_plot_cont(runtime)),
+            "xy-plot": runtime.makeFunction(lib.xyPlot(runtime)),
+            "xy-plot-cont": runtime.makeFunction(lib.xyPlotCont(runtime)),
             "test": runtime.makeFunction(lib.test(runtime))
         });
     };

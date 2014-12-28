@@ -1,9 +1,21 @@
+var WIDTH = 400;
+var HEIGHT = 400;
+
+function lastElement(arr) {
+    // Consumes an array and produces its last element
+    return arr[arr.length - 1];
+}
+
 define(["d3", "js/js-numbers"], function (d3, jsnums) {
+    'use strict';
+
     // Arbitrary JS that does what you need here.  You can declare more
     // dependencies above, as long as you can express them as requirejs modules
     // and put them in the same directory.
 
     function scaler(oldX, oldY, newX, newY, toInt) {
+        // Produces a scaler function to convert a value in
+        // an interval to another valud in a new interval
         return function (k) {
             var oldDiff = jsnums.subtract(k, oldX);
             var oldRange = jsnums.subtract(oldY, oldX);
@@ -20,6 +32,8 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
     }
 
     function adjustInRange(k, vmin, vmax) {
+        // Consumes a value and a range and produces
+        // a proper value in the range
         if (jsnums.lessThan(k, vmin)) {
             return vmin;
         } else if (jsnums.lessThan(vmax, k)) {
@@ -29,14 +43,15 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         }
     }
 
-    function xy_plot_meta(
+    function xyPlotMeta(
         runtime, f, xMin, xMax, yMin, yMax, getDataFunc, width, height) {
+        // Plots a graph
 
-        var data = getDataFunc(f, xMin, xMax, yMin, yMax, width, height);
+        var dataPoints = getDataFunc(f, xMin, xMax, yMin, yMax, width, height);
 
         // These are adapted from http://jsfiddle.net/christopheviau/Hwpe3/
         var margin = {'top': 30, 'left': 50, 'bottom': 30, 'right': 50},
-            tickX = 11, tickY = 21,
+            tickX = 11, tickY = 19,
             tickFormat = 'g';
 
         function getAxisConf(aMin, aMax) {
@@ -104,11 +119,11 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                 "translate(" + yAxisConf.pos * (width - 1) + ", 0)")
             .call(yAxis);
 
-        data.forEach(
-            function (arr) {
+        dataPoints.forEach(
+            function (groupedPoints) {
                 graph.append("path")
                     .attr("class", "plotting")
-                    .attr("d", line(arr));
+                    .attr("d", line(groupedPoints));
             }
         );
 
@@ -134,59 +149,128 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             .attr("y2", (1 - xAxisConf.pos) * (height - 1));
         graph.selectAll('.axis').style({'shape-rendering': 'crispEdges'});
         graph.selectAll('.axis text').style({'font-size': '10px'});
-        graph.selectAll('.axis line').style({'stroke': 'lightgray', 'opacity': 0.6});
+        graph.selectAll('.axis line').style({
+            'stroke': 'lightgray',
+            'opacity': 0.6
+        });
 
         runtime.getParam("current-animation-port")(detached.node());
     }
 
     function getDataCont(f, xMin, xMax, yMin, yMax, width, height) {
+        // Produces "rough" data points to be used for plotting
+        // It is rough because it assumes that f is continuous
+
         var inputScaler = scaler(0, width - 1, xMin, xMax, false),
             outputScaler = scaler(yMin, yMax, height - 1, 0, false);
 
-        function draw(arr, i) {
-            // Group data which are near each other together
+        function addPoint(dataPoints, i) {
+            // Consumes old data points and produces a new data points
+            // which one point is added
             var x = inputScaler(i), y;
-            var inner = arr[arr.length - 1];
+            var groupedPoints = lastElement(dataPoints);
             try {
+                // prevent Pyret's division by zero
                 y = f.app(x);
             } catch (e) {
-                arr.push([]);
-                return arr;
+                dataPoints.push([]);
+                return dataPoints;
             }
             try {
+                // y can't be converted to a fixnum if it is a complex number.
+                // we therefore use
                 if (Number.isNaN(jsnums.toFixnum(y))) {
-                    arr.push([]);
-                    return arr;
+                    dataPoints.push([]);
+                    return dataPoints;
                 }
             } catch (e) {
-                arr.push([]);
-                return arr;
+                dataPoints.push([]);
+                return dataPoints;
             }
             var possibleY = adjustInRange(y, yMin, yMax);
-            if (possibleY !== y) {
-                inner.push({
-                    x: i,
-                    y: jsnums.toFixnum(outputScaler(possibleY))
-                });
-                arr.push([]);
-                return arr;
-            }
-            inner.push({ x: i, y: jsnums.toFixnum(outputScaler(y)) });
-            return arr;
-        };
 
-        return d3.merge([d3.range(width), d3.range(width).reverse()])
-            .reduce(draw, [[]])
-            .filter(function (d) { return d.length > 1; });
+            groupedPoints.push({
+                'x': i,
+                'y': jsnums.toFixnum(outputScaler(possibleY)),
+                'realx': x,
+                'realy': y
+            });
+            if (possibleY !== y) {
+                dataPoints.push([]);
+            }
+            return dataPoints;
+        }
+
+        function getList(range) {
+            return range
+                .reduce(addPoint, [[]])
+                .filter(function (d) { return d.length > 1; });
+        }
+
+        var forwardList = getList(d3.range(width));
+        var backwardList = getList(d3.range(width).reverse())
+                .map(function (d) { return d.reverse(); }).reverse();
+
+        function getInterval(lst) {
+            return lst.map(function (sublist) {
+                return {
+                    left: sublist[0].x,
+                    right: sublist[sublist.length - 1].x,
+                    arr: sublist
+                };
+            });
+        }
+
+        var forwardInterval = getInterval(forwardList);
+        var backwardInterval = getInterval(backwardList);
+
+        var interval = forwardInterval.concat(backwardInterval)
+                .sort(function (a, b) { return a.left - b.left; });
+
+        function isIntersectInterval(a, b) {
+            var left = Math.max(a.left, b.left);
+            var right = Math.min(a.right, b.right);
+            return left <= right;
+        }
+
+        function mergeInterval(a, b) {
+            return {
+                left: a.left,
+                right: b.right,
+                arr: a.arr.concat(b.arr)
+            };
+        }
+
+        if (interval.length > 0) {
+            var firstValue = interval.shift();
+            return interval.reduce(
+                function (arr, val) {
+                    var prevValue = arr.pop();
+                    if (isIntersectInterval(prevValue, val)) {
+                        arr.push(mergeInterval(prevValue, val));
+                    } else {
+                        arr.push(prevValue);
+                        arr.push(val);
+                    }
+                    return arr;
+                }, [firstValue])
+                .map(function (d) {
+                    d.arr.sort(function (a, b) {
+                        return a.x - b.x;
+                    });
+                    return d.arr;
+                });
+        } else {
+            return [];
+        }
     }
 
     function getDataGeneric(f, xMin, xMax, yMin, yMax, width, height) {
-        var inputScaler = scaler(0, width - 1, xMin, xMax, false),
-            xToPixel = scaler(xMin, xMax, 0, width - 1, true),
+        var xToPixel = scaler(xMin, xMax, 0, width - 1, true),
             yToPixel = scaler(yMin, yMax, height - 1, 0, true),
             delta = jsnums.divide(
                 jsnums.subtract(xMax, xMin),
-                jsnums.multiply(width, 1000));
+                jsnums.multiply(width, 10000));
 
         var INSERTLEFT = 0, INSERTRIGHT = 1,
             dyTolerate = 1,
@@ -195,125 +279,140 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         var roughData = getDataCont(f, xMin, xMax, yMin, yMax, width, height);
         var stackInit = roughData.map(function (d) {
             return {
-                left: inputScaler(d[0].x),
-                right: inputScaler(d[d.length - 1].x),
+                left: d[0],
+                right: lastElement(d),
                 stage: INSERTLEFT
             };
         }).reverse();
 
         // use stack instead of recursion
-        var stack = stackInit;
+        var stack = stackInit, current, left, right, stage, ok,
+            dPixX, dPixY;
 
         while (stack.length > 0) {
-            var current = stack.pop();
-            var xLeft = current.left,
-                xRight = current.right,
-                stage = current.stage;
+            current = stack.pop();
+            left = current.left;
+            right = current.right;
+            stage = current.stage;
 
-            var pixXRight = xToPixel(xRight), yRight, pixYRight;
-
-            try {
-                yRight = adjustInRange(f.app(xRight), yMin, yMax);
-                pixYRight = yToPixel(yRight);
-            } catch (e) {
-                yRight = NaN;
-                pixYRight = NaN;
-            }
-
-            if (stage == INSERTLEFT) {
-                var pixXLeft = xToPixel(xLeft), yLeft, pixYLeft;
-
-                try {
-                    yLeft = adjustInRange(f.app(xLeft), yMin, yMax);
-                    pixYLeft = yToPixel(yLeft);
-                } catch (e) {
-                    yLeft = NaN;
-                    pixYLeft = NaN;
-                }
+            if (stage === INSERTLEFT) {
                 // we use ok as a flag instead of using results from pix
                 // which are unreliable
-                var ok = true;
+                ok = true;
 
-                if (!Number.isNaN(yLeft)) {
-                    data.push({x: pixXLeft, y: pixYLeft});
+                if (!Number.isNaN(left.realy)) {
+                    data.push({'x': left.x, 'y': left.y});
                 } else {
                     ok = false;
                 }
-                if (!Number.isNaN(yRight)) {
-                    stack.push(
-                        {left: xLeft, right: xRight, stage: INSERTRIGHT}
-                    );
+                if (!Number.isNaN(right.realy)) {
+                    current.stage = INSERTRIGHT;
+                    stack.push(current);
                 } else {
                     ok = false;
                 }
-                if (jsnums.approxEquals(xLeft, xRight, delta)) {
+                if (jsnums.approxEquals(left.realx, right.realx, delta)) {
+                    // this is the case where it's discontinuous
+                    // we have no need to continue searching
                     continue;
                 } else if (ok) {
-                    var dPixX = pixXRight - pixXLeft,
-                        dPixY = Math.abs(pixYRight - pixYLeft);
+                    dPixX = right.x - left.x;
+                    dPixY = Math.abs(right.y - left.y);
                     if (dPixX <= 1 && dPixY <= dyTolerate) {
+                        // this is the case where the graph is connected
+                        // enough to be considered continuous
                         continue;
                     }
                 }
-                var xMid = jsnums.divide(jsnums.add(xLeft, xRight), 2);
-                stack.push({left: xMid, right: xRight, stage: INSERTLEFT});
-                stack.push({left: xLeft, right: xMid, stage: INSERTLEFT});
-            } else if (stage == INSERTRIGHT) {
-                data.push({x: pixXRight, y: pixYRight});
+                var midRealX = jsnums.divide(
+                    jsnums.add(left.realx, right.realx), 2);
+                var midX = xToPixel(midRealX);
+                var midRealY, midY;
+                try {
+                    midRealY = f.app(midRealX);
+                    jsnums.toFixnum(midRealY); // to test complex number
+                    midY = yToPixel(midRealY);
+                } catch(e) {
+                    midRealY = NaN;
+                    midY = NaN;
+                }
+                var mid = {
+                    'realx': midRealX,
+                    'x': midX,
+                    'realy': midRealY,
+                    'y': midY
+                };
+                stack.push({
+                    'left': mid,
+                    'right': right,
+                    'stage': INSERTLEFT
+                });
+                stack.push({
+                    'left': left,
+                    'right': mid,
+                    'stage': INSERTLEFT
+                });
+            } else if (stage === INSERTRIGHT) {
+                data.push({'x': right.x, 'y': right.y});
             }
         }
 
-        var newData = data.filter(function(item, pos){
+        var newData = data.filter(function(item, pos) {
             return ((pos === 0) ||
                     (item.x !== data[pos - 1].x) ||
                     (item.y !== data[pos - 1].y));
-        }).reduce(function(arr, d){
-            var inner = arr[arr.length - 1];
+        }).reduce(function(arr, d) {
+            var inner = lastElement(arr);
             if (inner.length > 0) {
-                var prev = inner[inner.length - 1];
+                var prev = lastElement(inner);
                 if ((Math.abs(d.y - prev.y) > dyTolerate) ||
                     ((d.x - prev.x) > 1)) {
-                    arr.push([]);
+                    arr.push([d]);
+                } else {
+                    inner.push(d);
                 }
+            } else {
+                inner.push(d);
             }
-            arr[arr.length - 1].push(d);
             return arr;
         }, [[]]).filter(function (d) { return d.length > 1; });
+
+        //return newData;
 
         var intervals = newData.map(
             function (interval) {
                 return {
                     left: interval[0].x,
-                    right: interval[interval.length - 1].x
+                    right: lastElement(interval).x
                 };
-            });
+            }).reverse();
+        // we are going to perform stack operations
+        // so we reverse the order
 
         var flattened = roughData.reduce(
-            function(arr, innerArray){
-                innerArray.forEach(function (d){ arr.push(d); });
+            function(arr, innerArray) {
+                innerArray.forEach(function (d) { arr.push(d); });
                 return arr;
             }, []);
 
-        var group = 0;
-
         return flattened.reduce(
             function (arr, item) {
-                while ((group < intervals.length) &&
-                       (intervals[group].right < item.x)) {
-                    group++;
+                while ((intervals.length > 0) &&
+                       (lastElement(intervals).right < item.x)) {
+                    intervals.pop();
                     arr.push([]);
                 }
-                if (group < intervals.length) {
-                    if ((intervals[group].left <= item.x) &&
-                        (item.x <= intervals[group].right)) {
-                        arr[arr.length - 1].push(item);
+                if (intervals.length > 0) {
+                    if ((lastElement(intervals).left <= item.x) &&
+                        (item.x <= lastElement(intervals).right)) {
+                        lastElement(arr).push(item);
                     }
                 }
                 return arr;
             }, [[]]).filter(function (d) { return d.length > 1; });
     }
 
-    function xy_plot(runtime) {
+    function xyPlot(runtime) {
         return function (f, xMin, xMax, yMin, yMax) {
             runtime.checkArity(5, arguments, "xy-plot");
             runtime.checkFunction(f);
@@ -328,15 +427,13 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                                 "than x-max and y-max respectively.");
             }
 
-            var width = 500, height = 500;
-
-            xy_plot_meta(
+            xyPlotMeta(
                 runtime, f, xMin, xMax, yMin, yMax,
-                getDataGeneric, width, height);
+                getDataGeneric, WIDTH, HEIGHT);
         };
     }
 
-    function xy_plot_cont(runtime) {
+    function xyPlotCont(runtime) {
         return function (f, xMin, xMax, yMin, yMax) {
             runtime.checkArity(5, arguments, "xy-plot");
             runtime.checkFunction(f);
@@ -351,23 +448,21 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                                 "than x-max and y-max respectively.");
             }
 
-            var width = 500, height = 500;
-
-            xy_plot_meta(
+            xyPlotMeta(
                 runtime, f, xMin, xMax, yMin, yMax,
-                getDataCont, width, height);
+                getDataCont, WIDTH, HEIGHT);
         };
     }
 
     function test(runtime) {
-        return function(x, y){
+        return function(x, y) {
             console.log(jsnums.greaterThan(x, y));
         };
     }
 
     return {
-        xy_plot: xy_plot,
-        xy_plot_cont: xy_plot_cont,
+        xyPlot: xyPlot,
+        xyPlotCont: xyPlotCont,
         test: test
     };
 });
