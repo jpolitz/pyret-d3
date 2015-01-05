@@ -1,5 +1,5 @@
-var WIDTH = 400;
-var HEIGHT = 400;
+var WIDTH = 401;
+var HEIGHT = 401;
 
 function lastElement(arr) {
     // Consumes an array and produces its last element
@@ -8,10 +8,6 @@ function lastElement(arr) {
 
 define(["d3", "js/js-numbers"], function (d3, jsnums) {
     'use strict';
-
-    // Arbitrary JS that does what you need here.  You can declare more
-    // dependencies above, as long as you can express them as requirejs modules
-    // and put them in the same directory.
 
     function scaler(oldX, oldY, newX, newY, toInt) {
         // Produces a scaler function to convert a value in
@@ -51,7 +47,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
 
         // These are adapted from http://jsfiddle.net/christopheviau/Hwpe3/
         var margin = {'top': 30, 'left': 50, 'bottom': 30, 'right': 50},
-            tickX = 11, tickY = 19,
+            tickX = 11, tickY = 11,
             tickFormat = 'g';
 
         function getAxisConf(aMin, aMax) {
@@ -172,13 +168,8 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             try {
                 // prevent Pyret's division by zero
                 y = f.app(x);
-            } catch (e) {
-                dataPoints.push([]);
-                return dataPoints;
-            }
-            try {
-                // y can't be converted to a fixnum if it is a complex number.
-                // we therefore use
+                // y could be a complex number, which could not be converted
+                // to a fixnum
                 if (Number.isNaN(jsnums.toFixnum(y))) {
                     dataPoints.push([]);
                     return dataPoints;
@@ -187,6 +178,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                 dataPoints.push([]);
                 return dataPoints;
             }
+
             var possibleY = adjustInRange(y, yMin, yMax);
 
             groupedPoints.push({
@@ -214,9 +206,9 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         function getInterval(lst) {
             return lst.map(function (sublist) {
                 return {
-                    left: sublist[0].x,
-                    right: sublist[sublist.length - 1].x,
-                    arr: sublist
+                    'left': sublist[0].x,
+                    'right': lastElement(sublist).x,
+                    'arr': sublist
                 };
             });
         }
@@ -235,24 +227,24 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
 
         function mergeInterval(a, b) {
             return {
-                left: a.left,
-                right: b.right,
-                arr: a.arr.concat(b.arr)
+                'left': a.left,
+                'right': b.right,
+                'arr': a.arr.concat(b.arr)
             };
         }
 
         if (interval.length > 0) {
             var firstValue = interval.shift();
             return interval.reduce(
-                function (arr, val) {
-                    var prevValue = arr.pop();
+                function (dataPoints, val) {
+                    var prevValue = dataPoints.pop();
                     if (isIntersectInterval(prevValue, val)) {
-                        arr.push(mergeInterval(prevValue, val));
+                        dataPoints.push(mergeInterval(prevValue, val));
                     } else {
-                        arr.push(prevValue);
-                        arr.push(val);
+                        dataPoints.push(prevValue);
+                        dataPoints.push(val);
                     }
-                    return arr;
+                    return dataPoints;
                 }, [firstValue])
                 .map(function (d) {
                     d.arr.sort(function (a, b) {
@@ -279,9 +271,9 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         var roughData = getDataCont(f, xMin, xMax, yMin, yMax, width, height);
         var stackInit = roughData.map(function (d) {
             return {
-                left: d[0],
-                right: lastElement(d),
-                stage: INSERTLEFT
+                'left': d[0],
+                'right': lastElement(d),
+                'stage': INSERTLEFT
             };
         }).reverse();
 
@@ -358,26 +350,29 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         }
 
         var newData = data.filter(function(item, pos) {
-            return ((pos === 0) ||
-                    (item.x !== data[pos - 1].x) ||
-                    (item.y !== data[pos - 1].y));
-        }).reduce(function(arr, d) {
-            var inner = lastElement(arr);
-            if (inner.length > 0) {
-                var prev = lastElement(inner);
+            console.log(item.x, item.y);
+            return (item.y >= 0 && item.y < HEIGHT) &&
+                ((pos === 0) ||
+                 (item.x !== data[pos - 1].x) ||
+                 (item.y !== data[pos - 1].y));
+        }).reduce(function(dataPoints, d) {
+            var groupedPoints = lastElement(dataPoints);
+            if (groupedPoints.length > 0) {
+                var prev = lastElement(groupedPoints);
                 if ((Math.abs(d.y - prev.y) > dyTolerate) ||
                     ((d.x - prev.x) > 1)) {
-                    arr.push([d]);
+                    dataPoints.push([d]);
                 } else {
-                    inner.push(d);
+                    groupedPoints.push(d);
                 }
             } else {
-                inner.push(d);
+                groupedPoints.push(d);
             }
-            return arr;
+            return dataPoints;
         }, [[]]).filter(function (d) { return d.length > 1; });
 
-        //return newData;
+        // newData could be used to plot, but it's not smooth
+        // return newData;
 
         var intervals = newData.map(
             function (interval) {
@@ -389,26 +384,27 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         // we are going to perform stack operations
         // so we reverse the order
 
+        // flatten the rough data to be regrouped again
         var flattened = roughData.reduce(
-            function(arr, innerArray) {
-                innerArray.forEach(function (d) { arr.push(d); });
-                return arr;
+            function(lstOfPoints, groupedPoints) {
+                groupedPoints.forEach(function (d) { lstOfPoints.push(d); });
+                return lstOfPoints;
             }, []);
 
         return flattened.reduce(
-            function (arr, item) {
+            function (dataPoints, item) {
                 while ((intervals.length > 0) &&
                        (lastElement(intervals).right < item.x)) {
                     intervals.pop();
-                    arr.push([]);
+                    dataPoints.push([]);
                 }
                 if (intervals.length > 0) {
                     if ((lastElement(intervals).left <= item.x) &&
                         (item.x <= lastElement(intervals).right)) {
-                        lastElement(arr).push(item);
+                        lastElement(dataPoints).push(item);
                     }
                 }
-                return arr;
+                return dataPoints;
             }, [[]]).filter(function (d) { return d.length > 1; });
     }
 
@@ -466,4 +462,3 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         test: test
     };
 });
-
