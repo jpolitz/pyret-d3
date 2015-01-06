@@ -85,19 +85,20 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                     "transform",
                     "translate(" + margin.left + "," + margin.top + ")");
 
-        xMin = jsnums.toFixnum(xMin);
-        xMax = jsnums.toFixnum(xMax);
-        yMin = jsnums.toFixnum(yMin);
-        yMax = jsnums.toFixnum(yMax);
-
         var xAxisScaler = d3.scale.linear()
-                .domain([xMin, xMax]).range([0, width - 1]),
+                .domain([0, 1]).range([0, width - 1]),
             yAxisScaler = d3.scale.linear()
-                .domain([yMin, yMax]).range([height - 1, 0]);
+                .domain([0, 1]).range([height - 1, 0]);
+
+        var xAxisDisplayScaler = scaler(0, tickX - 1, xMin, xMax),
+            yAxisDisplayScaler = scaler(0, tickY - 1, yMin, yMax);
 
         var xAxis = d3.svg.axis().scale(xAxisScaler)
                 .orient((xAxisConf.pos === 0) ? "top" : "bottom")
-                .ticks(tickX).tickFormat(d3.format(tickFormat));
+                .ticks(tickX).tickFormat(
+                    function (d, i) {
+                        return xAxisDisplayScaler(i);
+                    });
 
         graph.append("g")
             .attr("class", "x axis").attr(
@@ -107,7 +108,10 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
 
         var yAxis = d3.svg.axis().scale(yAxisScaler)
                 .orient((yAxisConf.pos === 1) ? "right" : "left")
-                .ticks(tickY).tickFormat(d3.format(tickFormat));
+                .ticks(tickY).tickFormat(
+                    function (d, i) {
+                        return yAxisDisplayScaler(i);
+                    });
 
         graph.append("g")
             .attr("class", "y axis").attr(
@@ -277,6 +281,14 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             };
         }).reverse();
 
+        function fillVertical(left, right) {
+            /*
+            var mid = ...;
+            return fillVertical(left, mid).concat(fillVertical(mid, right));
+             */
+            return [];
+        }
+
         // use stack instead of recursion
         var stack = stackInit, current, left, right, stage, ok,
             dPixX, dPixY;
@@ -314,6 +326,9 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                         // this is the case where the graph is connected
                         // enough to be considered continuous
                         continue;
+                    } else if (dPixX === 0) {
+                        data.push.apply(fillVertical(left, right));
+                        // continue
                     }
                 }
                 var midRealX = jsnums.divide(
@@ -350,7 +365,6 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         }
 
         var newData = data.filter(function(item, pos) {
-            console.log(item.x, item.y);
             return (item.y >= 0 && item.y < HEIGHT) &&
                 ((pos === 0) ||
                  (item.x !== data[pos - 1].x) ||
