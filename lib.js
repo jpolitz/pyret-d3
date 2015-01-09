@@ -1,17 +1,35 @@
+/*
+ * pyret-d3
+ */
+'use strict';
+
 var WIDTH = 401;
 var HEIGHT = 401;
 
 function lastElement(arr) {
-    // Consumes an array and produces its last element
+    /*
+     * Produces the last element of arr
+     *
+     * @param {array} arr
+     * @return {Any}
+     */
     return arr[arr.length - 1];
 }
 
-define(["d3", "js/js-numbers"], function (d3, jsnums) {
-    'use strict';
-
+define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
     function scaler(oldX, oldY, newX, newY, toInt) {
-        // Produces a scaler function to convert a value in
-        // an interval to another valud in a new interval
+        /*
+         * Produces a scaler function to convert a value in
+         * an interval to another value in a new interval
+         *
+         * @param {jsnums} oldX
+         * @param {jsnums} oldY
+         * @param {jsnums} newX
+         * @param {jsnums} newY
+         * @param {boolean} toInt: if true, the result is converted to
+         * integer fixnum
+         * @return {Function}
+         */
         return function (k) {
             var oldDiff = jsnums.subtract(k, oldX);
             var oldRange = jsnums.subtract(oldY, oldX);
@@ -27,9 +45,16 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         };
     }
 
-    function adjustInRange(k, vmin, vmax) {
-        // Consumes a value and a range and produces
-        // a proper value in the range
+    var numLib = {};
+    numLib.adjustInRange = function(k, vmin, vmax) {
+        /*
+         * Adjust k to be between vmin and vmax if it's not in the range
+         *
+         * @param {jsnums} k
+         * @param {jsnums} vmin
+         * @param {jsnums} vmax
+         * @return {jsnums}
+         */
         if (jsnums.lessThan(k, vmin)) {
             return vmin;
         } else if (jsnums.lessThan(vmax, k)) {
@@ -37,18 +62,66 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         } else {
             return k;
         }
+    };
+
+    numLib.max = function(a, b) {
+        /*
+         * Find the maximum value
+         *
+         * @param {jsnums} a
+         * @param {jsnums} b
+         * @return {jsnums}
+         */
+        if (jsnums.lessThan(a, b)) {
+            return b;
+        } else {
+            return a;
+        }
+    };
+
+    numLib.min = function (a, b) {
+        /*
+         * Find the minimum value
+         *
+         * @param {jsnums} a
+         * @param {jsnums} b
+         * @return {jsnums}
+         */
+        if (jsnums.lessThan(a, b)) {
+            return a;
+        } else {
+            return b;
+        }
+    };
+
+    function createCanvas(width, height) {
+        var margin = {'top': 30, 'left': 70, 'bottom': 30, 'right': 70};
+
+        var detached = d3.select(document.createElement("div"));
+        var canvas = detached
+            .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr(
+                "transform",
+                "translate(" + margin.left + "," + margin.top + ")");
+        return {'detached': detached, 'canvas': canvas};
     }
 
-    function xyPlotMeta(
-        runtime, f, xMin, xMax, yMin, yMax, getDataFunc, width, height) {
-        // Plots a graph
-
-        var dataPoints = getDataFunc(f, xMin, xMax, yMin, yMax, width, height);
-
-        // These are adapted from http://jsfiddle.net/christopheviau/Hwpe3/
-        var margin = {'top': 30, 'left': 50, 'bottom': 30, 'right': 50},
-            tickX = 11, tickY = 11,
-            tickFormat = 'g';
+    function appendAxis(canvas, xMin, xMax, yMin, yMax, width, height) {
+        /*
+         * Produces a new canvas which has axis on
+         *
+         * @param {d3 selection} canvas
+         * @param {jsnums} xMin
+         * @param {jsnums} xMax
+         * @param {jsnums} yMin
+         * @param {jsnums} yMax
+         * @param {fixnum} width
+         * @param {fixnum} height
+         * @param {d3 selection}
+         */
 
         function getAxisConf(aMin, aMax) {
             var axisConf = {};
@@ -72,35 +145,44 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             yAxisConf = getAxisConf(xMin, xMax);
         xAxisConf.pos = 1 - xAxisConf.pos;
 
-        var line = d3.svg.line()
-                .x(function (d) { return d.x; })
-                .y(function (d) { return d.y; });
-
-        var detached = d3.select(document.createElement("div")),
-            graph = detached.append("svg")
-                .attr("width", width + margin.left + margin.right)
-                .attr("height", height + margin.top + margin.bottom)
-                .append("g")
-                .attr(
-                    "transform",
-                    "translate(" + margin.left + "," + margin.top + ")");
-
+        var tickNum = 6; // TODO: why 6, not 7?
         var xAxisScaler = d3.scale.linear()
-                .domain([0, 1]).range([0, width - 1]),
+                .domain([0, tickNum]).range([0, width - 1]),
             yAxisScaler = d3.scale.linear()
-                .domain([0, 1]).range([height - 1, 0]);
+                .domain([0, tickNum]).range([height - 1, 0]);
+        var allValues = d3.range(0, tickNum + 1);
 
-        var xAxisDisplayScaler = scaler(0, tickX - 1, xMin, xMax),
-            yAxisDisplayScaler = scaler(0, tickY - 1, yMin, yMax);
+        var xAxisDisplayScaler = scaler(0, tickNum, xMin, xMax),
+            yAxisDisplayScaler = scaler(0, tickNum, yMin, yMax);
+
+        var STR_LENGTH_MAX = 10;
 
         var xAxis = d3.svg.axis().scale(xAxisScaler)
                 .orient((xAxisConf.pos === 0) ? "top" : "bottom")
-                .ticks(tickX).tickFormat(
+                .tickValues(allValues).tickFormat(
                     function (d, i) {
-                        return xAxisDisplayScaler(i);
+                        var ret = xAxisDisplayScaler(i);
+                        if (ret.toString().length > STR_LENGTH_MAX) {
+                            var fixnum = jsnums.toFixnum(ret);
+                            if (fixnum.toString().length > STR_LENGTH_MAX) {
+                                var fixnumRounded = d3.format('.9r')(ret);
+                                // d3 always cast the result of format to string
+                                // and .r formatter could give NaN
+                                if ((fixnumRounded === "NaN") ||
+                                    (fixnumRounded.length > STR_LENGTH_MAX)) {
+                                    return d3.format('.3e')(fixnum);
+                                } else {
+                                    return fixnumRounded;
+                                }
+                            } else {
+                                return fixnum;
+                            }
+                        } else {
+                            return ret;
+                        }
                     });
 
-        graph.append("g")
+        canvas.append("g")
             .attr("class", "x axis").attr(
                 "transform",
                 "translate(0," + xAxisConf.pos * (height - 1) + ")")
@@ -108,54 +190,100 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
 
         var yAxis = d3.svg.axis().scale(yAxisScaler)
                 .orient((yAxisConf.pos === 1) ? "right" : "left")
-                .ticks(tickY).tickFormat(
+                .tickValues(allValues).tickFormat(
                     function (d, i) {
-                        return yAxisDisplayScaler(i);
+                        var ret = yAxisDisplayScaler(i);
+                        if (ret.toString().length > STR_LENGTH_MAX) {
+                            return d3.format('.3e')(jsnums.toFixnum(ret));
+                        } else {
+                            return ret;
+                        }
                     });
 
-        graph.append("g")
+        canvas.append("g")
             .attr("class", "y axis").attr(
                 "transform",
                 "translate(" + yAxisConf.pos * (width - 1) + ", 0)")
             .call(yAxis);
 
+        canvas.selectAll('.x.axis path').style({
+            'stroke': 'black',
+            'stroke-width': xAxisConf.bold ? 2 : 0,
+            'fill': 'none'
+        });
+        canvas.selectAll('.y.axis path').style({
+            'stroke': 'black',
+            'stroke-width': yAxisConf.bold ? 2 : 0,
+            'fill': 'none'
+        });
+
+        canvas.selectAll("g.y.axis g.tick line")
+            .attr("x1", -yAxisConf.pos * (width - 1))
+            .attr("x2", (1 - yAxisConf.pos) * (width - 1));
+        canvas.selectAll("g.x.axis g.tick line")
+            .attr("y1", -xAxisConf.pos * (height - 1))
+            .attr("y2", (1 - xAxisConf.pos) * (height - 1));
+
+        canvas.selectAll('.axis').style({'shape-rendering': 'crispEdges'});
+        canvas.selectAll('.axis text').style({'font-size': '10px'});
+        canvas.selectAll('.axis line').style({
+            'stroke': 'lightgray',
+            'opacity': 0.6
+        });
+
+        return canvas;
+    }
+
+    function xyPlotMeta(
+        runtime, xMin, xMax, yMin, yMax, width, height, dataPoints) {
+        // Plots a graph
+        // These are adapted from http://jsfiddle.net/christopheviau/Hwpe3/
+
+        var canvasObj = createCanvas(width, height);
+        var detached = canvasObj.detached;
+        var canvas = canvasObj.canvas;
+        canvas = appendAxis(canvas, xMin, xMax, yMin, yMax, width, height);
+
+        var line = d3.svg.line()
+                .x(function (d) { return d.x; })
+                .y(function (d) { return d.y; });
+
         dataPoints.forEach(
             function (groupedPoints) {
-                graph.append("path")
+                canvas.append("path")
                     .attr("class", "plotting")
                     .attr("d", line(groupedPoints));
             }
         );
 
-        // CSS goes here
-
-        graph.selectAll('.plotting').style(
+        canvas.selectAll('.plotting').style(
             {'stroke': 'blue', 'stroke-width': 1, 'fill': 'none'});
-        graph.selectAll('.x.axis path').style({
-            'stroke': 'black',
-            'stroke-width': xAxisConf.bold ? 2 : 0,
-            'fill': 'none'
-        });
-        graph.selectAll('.y.axis path').style({
-            'stroke': 'black',
-            'stroke-width': yAxisConf.bold ? 2 : 0,
-            'fill': 'none'
-        });
-        graph.selectAll("g.y.axis g.tick line")
-            .attr("x1", -yAxisConf.pos * (width - 1))
-            .attr("x2", (1 - yAxisConf.pos) * (width - 1));
-        graph.selectAll("g.x.axis g.tick line")
-            .attr("y1", -xAxisConf.pos * (height - 1))
-            .attr("y2", (1 - xAxisConf.pos) * (height - 1));
-        graph.selectAll('.axis').style({'shape-rendering': 'crispEdges'});
-        graph.selectAll('.axis text').style({'font-size': '10px'});
-        graph.selectAll('.axis line').style({
-            'stroke': 'lightgray',
-            'opacity': 0.6
-        });
 
         runtime.getParam("current-animation-port")(detached.node());
     }
+
+    function scatterPlotMeta(
+        runtime, xMin, xMax, yMin, yMax, width, height, dataPoints) {
+
+        var canvasObj = createCanvas(width, height);
+        var detached = canvasObj.detached;
+        var canvas = canvasObj.canvas;
+        canvas = appendAxis(canvas, xMin, xMax, yMin, yMax, width, height);
+
+        canvas.selectAll("circle")
+            .data(dataPoints)
+            .enter()
+            .append("circle")
+            .attr("class", "plotting")
+            .attr("cx", function (d) { return d.x; })
+            .attr("cy", function (d) { return d.y; })
+            .attr("r", 2);
+
+        canvas.selectAll('.plotting').style({'stroke': 'blue'});
+
+        runtime.getParam("current-animation-port")(detached.node());
+    }
+
 
     function getDataCont(f, xMin, xMax, yMin, yMax, width, height) {
         // Produces "rough" data points to be used for plotting
@@ -183,7 +311,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                 return dataPoints;
             }
 
-            var possibleY = adjustInRange(y, yMin, yMax);
+            var possibleY = numLib.adjustInRange(y, yMin, yMax);
 
             groupedPoints.push({
                 'x': i,
@@ -436,10 +564,9 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                 throw new Error("x-min and y-min must be strictly less " +
                                 "than x-max and y-max respectively.");
             }
-
             xyPlotMeta(
-                runtime, f, xMin, xMax, yMin, yMax,
-                getDataGeneric, WIDTH, HEIGHT);
+                runtime, xMin, xMax, yMin, yMax, WIDTH, HEIGHT,
+                getDataGeneric(f, xMin, xMax, yMin, yMax, WIDTH, HEIGHT));
         };
     }
 
@@ -457,15 +584,80 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                 throw new Error("x-min and y-min must be strictly less " +
                                 "than x-max and y-max respectively.");
             }
-
             xyPlotMeta(
-                runtime, f, xMin, xMax, yMin, yMax,
-                getDataCont, WIDTH, HEIGHT);
+                runtime, xMin, xMax, yMin, yMax, WIDTH, HEIGHT,
+                getDataCont(f, xMin, xMax, yMin, yMax, WIDTH, HEIGHT));
+        };
+    }
+
+
+    function scatterPlot(runtime, ffi) {
+        return function (lst) {
+            runtime.checkList(lst);
+
+            var dataPoints = ffi.toArray(lst).map(
+                function (e) {
+                    // check that e is a posn
+                    return {
+                        'x': runtime.getField(e, "x"),
+                        'y': runtime.getField(e, "y")
+                    };
+                }
+            );
+
+            if (dataPoints.length === 0) {
+                throw new Error("there must be at least one point in the list");
+            }
+
+            var xMin = dataPoints
+                    .map( function (d) { return d.x; } )
+                    .reduce(numLib.min);
+            var xMax = dataPoints
+                    .map( function (d) { return d.x; } )
+                    .reduce(numLib.max);
+            var yMin = dataPoints
+                    .map( function (d) { return d.y; } )
+                    .reduce(numLib.min);
+            var yMax = dataPoints
+                    .map( function (d) { return d.y; } )
+                    .reduce(numLib.max);
+
+            var blockPortion = 10;
+            var xOneBlock = jsnums.divide(jsnums.subtract(xMax, xMin), blockPortion);
+            var yOneBlock = jsnums.divide(jsnums.subtract(yMax, yMin), blockPortion);
+
+            xMin = jsnums.subtract(xMin, xOneBlock);
+            xMax = jsnums.add(xMax, xOneBlock);
+            yMin = jsnums.subtract(yMin, yOneBlock);
+            yMax = jsnums.add(yMax, yOneBlock);
+
+            // Plotting 1 point should be possible
+            // but we need a wider range
+            if (jsnums.equals(xMin, xMax)) {
+                xMin = jsnums.subtract(xMin, 1);
+                xMax = jsnums.add(xMax, 1);
+            }
+            if (jsnums.equals(yMin, yMax)) {
+                yMin = jsnums.subtract(yMin, 1);
+                yMax = jsnums.add(yMax, 1);
+            }
+
+            var xToPixel = scaler(xMin, xMax, 0, WIDTH - 1, true),
+                yToPixel = scaler(yMin, yMax, HEIGHT - 1, 0, true);
+
+            dataPoints = dataPoints.map(
+                function (d) {
+                    return {'x': xToPixel(d.x), 'y': yToPixel(d.y)};
+                }
+            );
+
+            scatterPlotMeta(runtime, xMin, xMax, yMin, yMax,
+                            WIDTH, HEIGHT, dataPoints);
         };
     }
 
     function test(runtime) {
-        return function(x, y) {
+        return function (x, y) {
             console.log(jsnums.greaterThan(x, y));
         };
     }
@@ -473,6 +665,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
     return {
         xyPlot: xyPlot,
         xyPlotCont: xyPlotCont,
+        scatterPlot: scatterPlot,
         test: test
     };
 });

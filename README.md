@@ -29,13 +29,20 @@ Arguments are:
 4. y-min [Number]
 5. y-max [Number]
 
+scatter-plot
+-----------
+
+Arguments are:
+
+1. List<Posn>
+
 Example
 =======
 
-xy-plot & xy-ploy-cont
-----------------------
+xy-plot & xy-ploy-cont & scatter-plot
+------------------------------------
 
-https://patch-experiment.herokuapp.com/editor#share=0Bxr4FfLa3goOWlVUMXJjcS1Qd2s&v=v0.5r763-test
+https://patch-experiment.herokuapp.com/editor#share=0Bxr4FfLa3goOVmtfV21oazVBVTg&v=v0.5r763-test
 
 Credit
 ======
