@@ -15,6 +15,7 @@ define(["js/runtime-util", "my-project/lib", "js/ffi-helpers"],
                        "xy-plot": runtime.makeFunction(lib.xyPlot(runtime)),
                        "xy-plot-cont": runtime.makeFunction(lib.xyPlotCont(runtime)),
                        "scatter-plot": runtime.makeFunction(lib.scatterPlot(runtime, ffi)),
+                       "show-svg": runtime.makeFunction(lib.showSVG(runtime)),
                        "test": runtime.makeFunction(lib.test(runtime))
                    });
                });
