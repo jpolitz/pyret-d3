@@ -16,6 +16,80 @@ function lastElement(arr) {
     return arr[arr.length - 1];
 }
 
+function assert(val) {
+    if (!val) {
+        throw new Error("assertion failed");
+    }
+}
+
+function FenwickTree(n) {
+    /*
+     * Fenwick Tree for computing prefix sum
+     *
+     * @param {n} number of elements
+     * @return {Object}
+     */
+    this.arr = []; // use index 1 to n
+    for (var i = 0; i < n + 1; ++i) {
+        this.arr.push(0);
+    }
+
+    this.add = function (ind, val) {
+
+        assert(1 <= ind); // add from 1 to n
+        assert(ind <= n);
+        while (ind <= n) {
+            this.arr[ind] += val;
+            ind += (ind & (-ind));
+        }
+    };
+    this.sum = function (ind) {
+        assert(0 <= ind); // query from 0 to n
+        assert(ind <= n);
+        var ret = 0;
+        while (ind >= 1) {
+            ret += this.arr[ind];
+            ind -= (ind & (-ind));
+        }
+        return ret;
+    };
+    this.sumInterval = function (l, r) {
+        return this.sum(r) - this.sum(l - 1);
+    };
+};
+
+/*
+var testFenwick = new FenwickTree(10);
+testFenwick.add(1, 2);
+assert(testFenwick.sumInterval(1, 10) === 2);
+testFenwick.add(1, 3);
+assert(testFenwick.sumInterval(1, 10) === 5);
+testFenwick.add(3, 4);
+assert(testFenwick.sumInterval(1, 10) === 9);
+assert(testFenwick.sumInterval(1, 2) === 5);
+assert(testFenwick.sumInterval(2, 3) === 4);
+*/
+
+function LogTable(n) {
+    this.fenwick = new FenwickTree(n);
+    this.occupy = function (v) {
+        v += 1; // use baed-1 index
+        if (!Number.isNaN(v) && this.fenwick.sumInterval(v, v) === 0) {
+            this.fenwick.add(v, 1);
+        }
+        return this;
+    };
+    this.isRangedOccupied = function (l, r) {
+        l += 1;
+        r += 1;
+        if (Number.isNaN(l) || Number.isNaN(r)) {
+            return false;
+        } else {
+            return this.fenwick.sumInterval(l, r) === (r - l + 1);
+        }
+    };
+};
+
 define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
     var numLib = {
         'scaler': function(oldX, oldY, newX, newY, toInt) {
@@ -265,6 +339,28 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
         },
 
 
+        findMidPoint: function(left, right, xToPixel, yToPixel, f, yMin, yMax) {
+            var midRealX = jsnums.divide(
+                jsnums.add(left.realx, right.realx), 2);
+            var midX = xToPixel(midRealX);
+            var midRealY, midY;
+            try {
+                midRealY = f.app(midRealX);
+                jsnums.toFixnum(midRealY); // to test complex number
+                midRealY = numLib.adjustInRange(midRealY, yMin, yMax);
+                midY = yToPixel(midRealY);
+            } catch(e) {
+                midRealY = NaN;
+                midY = NaN;
+            }
+            return {
+                'realx': midRealX,
+                'x': midX,
+                'realy': midRealY,
+                'y': midY
+            };
+        },
+
         getDataRough: function(f, xMin, xMax, yMin, yMax, width, height) {
             // Produces "rough" data points to be used for plotting
             // It is rough because it assumes that f is continuous
@@ -390,12 +486,33 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
                 };
             }).reverse();
 
-            function fillVertical(left, right) {
-                /*
-                 var mid = ...;
-                 return fillVertical(left, mid).concat(fillVertical(mid, right));
-                 */
-                return [];
+            function fillVertical(left, right, logTable, depth) {
+                if (depth === 0) {
+                    return {
+                        'logTable': logTable,
+                        'dataPoints': []
+                    };
+                }
+                logTable = logTable.occupy(left.y).occupy(right.y);
+                if (logTable.isRangedOccupied(left.y, right.y)) {
+                    return {
+                        'logTable': logTable,
+                        'dataPoints': [
+                            {'x': left.x, 'y': left.y, 'cont': true},
+                            {'x': right.x, 'y': right.y, 'cont': true}
+                        ]
+                    };
+                }
+                var mid = xyPlot.findMidPoint(
+                    left, right, xToPixel, yToPixel, f, yMin, yMax);
+                var resultLeft = fillVertical(left, mid, logTable, depth - 1);
+                logTable = resultLeft.logTable;
+                var resultRight = fillVertical(mid, right, logTable, depth - 1);
+                logTable = resultRight.logTable;
+                return {
+                    'logTable': logTable,
+                    'dataPoints': resultLeft.dataPoints.concat(resultRight.dataPoints)
+                };
             }
 
             // use stack instead of recursion
@@ -414,7 +531,7 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
                     ok = true;
 
                     if (!Number.isNaN(left.realy)) {
-                        data.push({'x': left.x, 'y': left.y});
+                        data.push({'x': left.x, 'y': left.y, 'cont': false});
                     } else {
                         ok = false;
                     }
@@ -436,28 +553,14 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
                             // enough to be considered continuous
                             continue;
                         } else if (dPixX === 0) {
-                            data.push.apply(fillVertical(left, right));
-                            // continue
+                            var logTable = new LogTable(height);
+                            var result = fillVertical(left, right, logTable, 15);
+                            data.push.apply(data, result.dataPoints);
+                            continue;
                         }
                     }
-                    var midRealX = jsnums.divide(
-                        jsnums.add(left.realx, right.realx), 2);
-                    var midX = xToPixel(midRealX);
-                    var midRealY, midY;
-                    try {
-                        midRealY = f.app(midRealX);
-                        jsnums.toFixnum(midRealY); // to test complex number
-                        midY = yToPixel(midRealY);
-                    } catch(e) {
-                        midRealY = NaN;
-                        midY = NaN;
-                    }
-                    var mid = {
-                        'realx': midRealX,
-                        'x': midX,
-                        'realy': midRealY,
-                        'y': midY
-                    };
+                    var mid = xyPlot.findMidPoint(
+                        left, right, xToPixel, yToPixel, f, yMin, yMax);
                     stack.push({
                         'left': mid,
                         'right': right,
@@ -469,13 +572,15 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
                         'stage': INSERTLEFT
                     });
                 } else if (stage === INSERTRIGHT) {
-                    data.push({'x': right.x, 'y': right.y});
+                    data.push({'x': right.x, 'y': right.y, 'cont': false});
                 }
             }
 
             var newData = data.filter(function(item, pos) {
+                //console.log(item.x, item.y, item.cont);
                 return (item.y >= 0 && item.y < HEIGHT) &&
                     ((pos === 0) ||
+                     item.cont ||
                      (item.x !== data[pos - 1].x) ||
                      (item.y !== data[pos - 1].y));
             }).reduce(function(dataPoints, d) {
@@ -495,7 +600,7 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
             }, [[]]).filter(function (d) { return d.length > 1; });
 
             // newData could be used to plot, but it's not smooth
-            // return newData;
+            return newData;
 
             var intervals = newData.map(
                 function (interval) {
@@ -675,7 +780,6 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
              */
             runtime.checkString(xml);
             runtime.getParam("current-animation-port")(xml);
-            console.log();
         };
     }
 
