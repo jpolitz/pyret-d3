@@ -16,9 +16,9 @@ function lastElement(arr) {
     return arr[arr.length - 1];
 }
 
-function assert(val) {
+function assert(val, msg) {
     if (!val) {
-        throw new Error("assertion failed");
+        throw new Error("Assertion failed: " + (msg || ""));
     }
 }
 
@@ -26,7 +26,7 @@ function FenwickTree(n) {
     /*
      * Fenwick Tree for computing prefix sum
      *
-     * @param {n} number of elements
+     * @param {fixnum} n: number of elements
      * @return {Object}
      */
     this.arr = []; // use index 1 to n
@@ -35,15 +35,28 @@ function FenwickTree(n) {
     }
 
     this.add = function (ind, val) {
-
+        /*
+         * Add `val` to position `ind`
+         *
+         * @param {fixnum} ind: index
+         * @param {fixnum} val: value
+         * @return {Object} this
+         */
         assert(1 <= ind); // add from 1 to n
         assert(ind <= n);
         while (ind <= n) {
             this.arr[ind] += val;
             ind += (ind & (-ind));
         }
+        return this;
     };
     this.sum = function (ind) {
+        /*
+         * Produces the sum of all values from position 1 to `ind`
+         *
+         * @param {fixnum} ind: index
+         * @return {fixnum}
+         */
         assert(0 <= ind); // query from 0 to n
         assert(ind <= n);
         var ret = 0;
@@ -54,6 +67,13 @@ function FenwickTree(n) {
         return ret;
     };
     this.sumInterval = function (l, r) {
+        /*
+         * Produces the sum of all values between position `l` and `r`
+         *
+         * @param {fixnum} l
+         * @param {fixnum} r
+         * @return {fixnum}
+         */
         return this.sum(r) - this.sum(l - 1);
     };
 };
@@ -85,6 +105,11 @@ function LogTable(n) {
         if (Number.isNaN(l) || Number.isNaN(r)) {
             return false;
         } else {
+            if (l > r) {
+                var tmp = l;
+                l = r;
+                r = tmp;
+            }
             return this.fenwick.sumInterval(l, r) === (r - l + 1);
         }
     };
