@@ -1,48 +1,66 @@
-Usage
-=====
+https://patch-experiment.herokuapp.com/editor#share=0Bxr4FfLa3goObF90QVp5eU1CdXc&v=v0.5r765-test
+
+Data Definition
+===============
+
+data Posn:
+  | posn(x :: Number, y :: Number)
+end
+
+data Vertex:
+  | vertex(name :: String,
+           color :: Color)
+end
+
+data Edge:
+  | edge(from :: Vertex,
+         to :: Vertex,
+         type :: EdgeType)
+end
+
+Functions
+=========
 
 xy-plot
 -------
 
-This function plots a graph. It is slow and might not render the graph properly.
+xy-plot(f :: (Number -> Number),
+        x-min :: Number,
+        x-max :: Number,
+        y-min :: Number,
+        y-max :: Number)
 
-Arguments are:
+xy-plot-cont (deprecated)
+-------------------------
 
-1. a function to be plotted [(Number -> Number)]
-2. x-min [Number]
-3. x-max [Number]
-4. y-min [Number]
-5. y-max [Number]
-
-xy-plot-cont
-------------
-
-This function plots a graph. It is very fast. However,
-it assumes that the plotting graph is continuous and therefore will show
-stange behavior such as showing vertical bars in a step function
-
-Arguments are:
-
-1. a function to be plotted [(Number -> Number)]
-2. x-min [Number]
-3. x-max [Number]
-4. y-min [Number]
-5. y-max [Number]
+xy-plot-cont(f :: (Number -> Number),
+             x-min :: Number,
+             x-max :: Number,
+             y-min :: Number,
+             y-max :: Number)
 
 scatter-plot
------------
+------------
 
-Arguments are:
+scatter-plot(lst :: List<Posn>)
 
-1. List<Posn>
+histrogram (not implemented)
+----------------------------
+
+histrogram(lst :: List<Number>, n :: Number)
+
+graph-display (not implemented)
+-------------------------------
+
+graph-display(vertices :: List<Vertex>,
+              edges :: List<Edge>)
 
 Example
 =======
 
-xy-plot & xy-ploy-cont & scatter-plot
-------------------------------------
-
-https://patch-experiment.herokuapp.com/editor#share=0Bxr4FfLa3goOVmtfV21oazVBVTg&v=v0.5r763-test
+1. scatter-plot([list: posn(1, 2), posn(100, 100), posn(50, 51), posn(49, 46)])
+2. xy-plot(num-floor, -10, 10, -10, 10)
+3. xy-plot(lam(x): num-sin(1 / x) end, -1, 1, -1, 1)
 
 Credit
 ======

@@ -50,6 +50,7 @@ function FenwickTree(n) {
         }
         return this;
     };
+
     this.sum = function (ind) {
         /*
          * Produces the sum of all values from position 1 to `ind`
@@ -66,6 +67,7 @@ function FenwickTree(n) {
         }
         return ret;
     };
+
     this.sumInterval = function (l, r) {
         /*
          * Produces the sum of all values between position `l` and `r`
@@ -91,15 +93,35 @@ assert(testFenwick.sumInterval(2, 3) === 4);
 */
 
 function LogTable(n) {
+    /*
+     * LogTable to check whether an interval is full
+     *
+     * @param {fixnum} n
+     */
     this.fenwick = new FenwickTree(n);
+
     this.occupy = function (v) {
-        v += 1; // use baed-1 index
+        /*
+         * Occupied a space
+         *
+         * @param {fixnum} v
+         * @return {Object} this
+         */
+        v += 1; // use based-1 index
         if (!Number.isNaN(v) && this.fenwick.sumInterval(v, v) === 0) {
             this.fenwick.add(v, 1);
         }
         return this;
     };
+
     this.isRangedOccupied = function (l, r) {
+        /*
+         * Answered whether the interval [l, r] is all occupied
+         *
+         * @param {fixnum} l
+         * @param {fixnum} r
+         * @return {Boolean}
+         */
         l += 1;
         r += 1;
         if (Number.isNaN(l) || Number.isNaN(r)) {
@@ -115,7 +137,7 @@ function LogTable(n) {
     };
 };
 
-define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
+define(["d3", "js/js-numbers"], function (d3, jsnums) {
     var numLib = {
         'scaler': function(oldX, oldY, newX, newY, toInt) {
             /*
@@ -195,6 +217,14 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
     };
 
     function createCanvas(width, height) {
+        /*
+         * Creates a canvas and detached node
+         *
+         * @param {fixnum} width: in pixel
+         * @param {fixnum} height: in pixel
+         * @return {Object} an object containing 'detached' which has
+         * a detached node and 'canvas' which has a canvas
+         */
         var margin = {'top': 30, 'left': 70, 'bottom': 30, 'right': 70};
 
         var detached = d3.select(document.createElement("div"));
@@ -266,8 +296,8 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
                             var fixnum = jsnums.toFixnum(ret);
                             if (fixnum.toString().length > STR_LENGTH_MAX) {
                                 var fixnumRounded = d3.format('.9r')(ret);
-                                // d3 always cast the result of format to string
-                                // and .r formatter could give NaN
+                                // d3 always cast the result of format to
+                                // string and .r formatter could give NaN
                                 if ((fixnumRounded === "NaN") ||
                                     (fixnumRounded.length > STR_LENGTH_MAX)) {
                                     return d3.format('.3e')(fixnum);
@@ -335,7 +365,12 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
     }
 
     var xyPlot = {
-        plot: function(
+        'constant': {
+            'rangeError': "x-min and y-min must be strictly less than " +
+                "x-max and y-max respectively."
+        },
+
+        'plot': function(
             runtime, xMin, xMax, yMin, yMax, width, height, dataPoints) {
             // Plots a graph
             // These are adapted from http://jsfiddle.net/christopheviau/Hwpe3/
@@ -364,7 +399,8 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
         },
 
 
-        findMidPoint: function(left, right, xToPixel, yToPixel, f, yMin, yMax) {
+        'findMidPoint': function (left, right, xToPixel, yToPixel,
+                                  f, yMin, yMax) {
             var midRealX = jsnums.divide(
                 jsnums.add(left.realx, right.realx), 2);
             var midX = xToPixel(midRealX);
@@ -401,8 +437,8 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
                 try {
                     // prevent Pyret's division by zero
                     y = f.app(x);
-                    // y could be a complex number, which could not be converted
-                    // to a fixnum
+                    // y could be a complex number, which could not be
+                    // converted to a fixnum
                     if (Number.isNaN(jsnums.toFixnum(y))) {
                         dataPoints.push([]);
                         return dataPoints;
@@ -495,14 +531,15 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
                 yToPixel = numLib.scaler(yMin, yMax, height - 1, 0, true),
                 delta = jsnums.divide(
                     jsnums.subtract(xMax, xMin),
-                    jsnums.multiply(width, 10000));
+                    jsnums.multiply(width, 1000));
 
-            var INSERTLEFT = 0, INSERTRIGHT = 1,
+            var MAXDEPTH = 15, INSERTLEFT = 0, INSERTRIGHT = 1,
                 dyTolerate = 1,
                 data = [];
 
             var roughData = xyPlot.getDataRough(
                 f, xMin, xMax, yMin, yMax, width, height);
+
             var stackInit = roughData.map(function (d) {
                 return {
                     'left': d[0],
@@ -510,6 +547,13 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
                     'stage': INSERTLEFT
                 };
             }).reverse();
+
+            /*
+            stackInit = [{
+                'left': lastElement(stackInit).left,
+                'right': stackInit[0].right, 'stage': INSERTLEFT
+            }];
+             */
 
             function fillVertical(left, right, logTable, depth) {
                 if (depth === 0) {
@@ -519,24 +563,28 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
                     };
                 }
                 logTable = logTable.occupy(left.y).occupy(right.y);
+
                 if (logTable.isRangedOccupied(left.y, right.y)) {
                     return {
                         'logTable': logTable,
                         'dataPoints': [
                             {'x': left.x, 'y': left.y, 'cont': true},
                             {'x': right.x, 'y': right.y, 'cont': true}
-                        ]
+                        ] // really? why the left point should have cont=true?
                     };
                 }
                 var mid = xyPlot.findMidPoint(
                     left, right, xToPixel, yToPixel, f, yMin, yMax);
-                var resultLeft = fillVertical(left, mid, logTable, depth - 1);
+                var resultLeft = fillVertical(
+                    left, mid, logTable, depth - 1);
                 logTable = resultLeft.logTable;
-                var resultRight = fillVertical(mid, right, logTable, depth - 1);
+                var resultRight = fillVertical(
+                    mid, right, logTable, depth - 1);
                 logTable = resultRight.logTable;
                 return {
                     'logTable': logTable,
-                    'dataPoints': resultLeft.dataPoints.concat(resultRight.dataPoints)
+                    'dataPoints': resultLeft.dataPoints.concat(
+                        resultRight.dataPoints)
                 };
             }
 
@@ -549,6 +597,7 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
                 left = current.left;
                 right = current.right;
                 stage = current.stage;
+
 
                 if (stage === INSERTLEFT) {
                     // we use ok as a flag instead of using results from pix
@@ -579,7 +628,8 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
                             continue;
                         } else if (dPixX === 0) {
                             var logTable = new LogTable(height);
-                            var result = fillVertical(left, right, logTable, 15);
+                            var result = fillVertical(left, right, logTable,
+                                                      MAXDEPTH);
                             data.push.apply(data, result.dataPoints);
                             continue;
                         }
@@ -601,19 +651,19 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
                 }
             }
 
+
+            // TODO: Below is absolutely wrong; why does it work?
             var newData = data.filter(function(item, pos) {
-                //console.log(item.x, item.y, item.cont);
                 return (item.y >= 0 && item.y < HEIGHT) &&
                     ((pos === 0) ||
-                     item.cont ||
                      (item.x !== data[pos - 1].x) ||
                      (item.y !== data[pos - 1].y));
             }).reduce(function(dataPoints, d) {
                 var groupedPoints = lastElement(dataPoints);
                 if (groupedPoints.length > 0) {
                     var prev = lastElement(groupedPoints);
-                    if ((Math.abs(d.y - prev.y) > dyTolerate) ||
-                        ((d.x - prev.x) > 1)) {
+                    if ((!d.cont) && ((Math.abs(d.y - prev.y) > dyTolerate) ||
+                        ((d.x - prev.x) > 1))) {
                         dataPoints.push([d]);
                     } else {
                         groupedPoints.push(d);
@@ -640,7 +690,9 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
             // flatten the rough data to be regrouped again
             var flattened = roughData.reduce(
                 function(lstOfPoints, groupedPoints) {
-                    groupedPoints.forEach(function (d) { lstOfPoints.push(d); });
+                    groupedPoints.forEach(function (d) {
+                        lstOfPoints.push(d);
+                    });
                     return lstOfPoints;
                 }, []);
 
@@ -670,36 +722,38 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
                 runtime.checkNumber(yMin);
                 runtime.checkNumber(yMax);
 
+                // TODO: check that f produces Number?
+
                 if (jsnums.greaterThanOrEqual(xMin, xMax) ||
                     jsnums.greaterThanOrEqual(yMin, yMax)) {
-                    runtime.throwMessageException("x-min and y-min must be strictly " +
-                                                  "less than x-max and y-max " +
-                                                  "respectively.");
+                    runtime.throwMessageException(xyPlot.constants.rangeError);
                 }
                 xyPlot.plot(
                     runtime, xMin, xMax, yMin, yMax, WIDTH, HEIGHT,
-                    xyPlot.getDataBisect(f, xMin, xMax, yMin, yMax, WIDTH, HEIGHT));
+                    xyPlot.getDataBisect(f, xMin, xMax, yMin, yMax,
+                                         WIDTH, HEIGHT));
             };
         },
 
         xyPlotCont: function(runtime) {
             return function (f, xMin, xMax, yMin, yMax) {
-                runtime.checkArity(5, arguments, "xy-plot");
+                runtime.checkArity(5, arguments, "xy-plot-cont");
                 runtime.checkFunction(f);
                 runtime.checkNumber(xMin);
                 runtime.checkNumber(xMax);
                 runtime.checkNumber(yMin);
                 runtime.checkNumber(yMax);
 
+                // TODO: check that f produces Number?
+
                 if (jsnums.greaterThanOrEqual(xMin, xMax) ||
                     jsnums.greaterThanOrEqual(yMin, yMax)) {
-                    runtime.throwMessageException("x-min and y-min must be strictly " +
-                                                  "less than x-max and y-max " +
-                                                  "respectively.");
+                    runtime.throwMessageException(xyPlot.constants.rangeError);
                 }
                 xyPlot.plot(
                     runtime, xMin, xMax, yMin, yMax, WIDTH, HEIGHT,
-                    xyPlot.getDataRough(f, xMin, xMax, yMin, yMax, WIDTH, HEIGHT));
+                    xyPlot.getDataRough(f, xMin, xMax, yMin, yMax,
+                                        WIDTH, HEIGHT));
             };
         }
     };
@@ -734,7 +788,7 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
 
                 var dataPoints = ffi.toArray(lst).map(
                     function (e) {
-                        // check that e is a posn
+                        // TODO: check that e is a posn?
                         return {
                             'x': runtime.getField(e, "x"),
                             'y': runtime.getField(e, "y")
@@ -743,8 +797,8 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
                 );
 
                 if (dataPoints.length === 0) {
-                    runtime.throwMessageException("There must be at least one point " +
-                                                  "in the list.");
+                    runtime.throwMessageException("There must be at least " +
+                                                  "one point in the list.");
                 }
 
                 var xMin = dataPoints
@@ -761,8 +815,10 @@ define(["d3", "js/runtime-util", "js/js-numbers"], function (d3, util, jsnums) {
                         .reduce(numLib.max);
 
                 var blockPortion = 10;
-                var xOneBlock = jsnums.divide(jsnums.subtract(xMax, xMin), blockPortion);
-                var yOneBlock = jsnums.divide(jsnums.subtract(yMax, yMin), blockPortion);
+                var xOneBlock = jsnums.divide(jsnums.subtract(xMax, xMin),
+                                              blockPortion);
+                var yOneBlock = jsnums.divide(jsnums.subtract(yMax, yMin),
+                                              blockPortion);
 
                 xMin = jsnums.subtract(xMin, xOneBlock);
                 xMax = jsnums.add(xMax, xOneBlock);
