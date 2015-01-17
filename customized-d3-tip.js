@@ -22,19 +22,31 @@
   // Public - contructs a new tooltip
   //
   // Returns a tip
-  return function(detached) {
+  return function(detached) { // Oak: accept detached as an argument
     var direction = d3_tip_direction,
         offset    = d3_tip_offset,
         html      = d3_tip_html,
         node      = initNode(),
         svg       = null,
         point     = null,
-        target    = null
+        target    = null,
+        firstXPos = null,
+        firstYPos = null;
 
     function tip(vis) {
         svg = getSVGNode(vis)
         point = svg.createSVGPoint()
+
+        // Oak: we can't append a node to the body, apparently because
+        // other objects are in front of the object, making it can't
+        // be seen.
         detached.node().appendChild(node);
+
+        // Oak: as the initial position is detached, not body
+        // we should keep the initial position
+        var clientRect = detached.node().getBoundingClientRect();
+        firstXPos = clientRect.left;
+        firstYPos = clientRect.top;
     }
 
     // Public - show the tooltip on the screen
@@ -58,9 +70,15 @@
 
       while(i--) nodel.classed(directions[i], false)
       coords = direction_callbacks.get(dir).apply(this)
+
+      // Oak: don't forget to remove the x, y of the detached
+      // Note: 20 is an arbitary number
+      var clientRect = detached.node().getBoundingClientRect();
       nodel.classed(dir, true).style({
-        top: (coords.top +  poffset[0]) + scrollTop + 'px',
-        left: (coords.left + poffset[1]) + scrollLeft + 'px'
+        top: (coords.top +  poffset[0] - clientRect.top + firstYPos + 20) +
+              scrollTop + 'px',
+        left: (coords.left + poffset[1] - clientRect.left + firstXPos + 20) +
+              scrollLeft + 'px'
       })
 
       return tip

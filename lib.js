@@ -919,14 +919,12 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                     .data(data)
                     .enter().append("g")
                     .attr("class", "bar")
-                    .attr("transform", function(d) {
-                        return "translate(" + x(d.x) + "," + y(d.y) + ")";
-                    })
                     .on("mouseover", tip.show)
                     .on("mouseout", tip.hide);
 
             bar.append("rect")
-                .attr("x", 1)
+                .attr("x", function(d) { return x(d.x); })
+                .attr("y", function(d) { return y(d.y); })
                 .attr("width", x(data[0].dx) - 1)
                 .attr("height", function(d) { return height - y(d.y); });
 
