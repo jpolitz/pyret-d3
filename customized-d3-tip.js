@@ -41,12 +41,6 @@
         // other objects are in front of the object, making it can't
         // be seen.
         detached.node().appendChild(node);
-
-        // Oak: as the initial position is detached, not body
-        // we should keep the initial position
-        var clientRect = detached.node().getBoundingClientRect();
-        firstXPos = clientRect.left;
-        firstYPos = clientRect.top;
     }
 
     // Public - show the tooltip on the screen
@@ -72,12 +66,12 @@
       coords = direction_callbacks.get(dir).apply(this)
 
       // Oak: don't forget to remove the x, y of the detached
-      // Note: 20 is an arbitary number
+      // This will make the offset wrong a little bit
       var clientRect = detached.node().getBoundingClientRect();
       nodel.classed(dir, true).style({
-        top: (coords.top +  poffset[0] - clientRect.top + firstYPos + 20) +
+        top: (coords.top +  poffset[0] - clientRect.top) +
               scrollTop + 'px',
-        left: (coords.left + poffset[1] - clientRect.left + firstXPos + 20) +
+        left: (coords.left + poffset[1] - clientRect.left) +
               scrollLeft + 'px'
       })
 

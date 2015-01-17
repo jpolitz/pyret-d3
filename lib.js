@@ -286,7 +286,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
          * @param {jsnums} yMax
          * @param {fixnum} width
          * @param {fixnum} height
-         * @param {d3 selection}
+         * @return {d3 selection}
          */
 
         function getAxisConf(aMin, aMax) {
@@ -784,21 +784,49 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
         plot: function(
             runtime, xMin, xMax, yMin, yMax, width, height, dataPoints) {
 
+            var xToPixel = numLib.scaler(xMin, xMax, 0, WIDTH - 1, true),
+                yToPixel = numLib.scaler(yMin, yMax, HEIGHT - 1, 0, true);
+
             var canvasObj = createCanvas(width, height);
             var detached = canvasObj.detached;
             var canvas = canvasObj.canvas;
             canvas = appendAxis(canvas, xMin, xMax, yMin, yMax, width, height);
+
+            var tip = d3tip(detached)
+                    .attr('class', 'd3-tip')
+                    .direction('e')
+                    .offset([0, 20])
+                    .html(function (d) {
+                        var x = myFormatter(d.x, 6);
+                        var y = myFormatter(d.y, 6);
+                        return "x: " + x.toString() + "<br />" +
+                            "y: " + y.toString() + "<br />";
+                    });
+
+            canvas.call(tip);
 
             canvas.selectAll("circle")
                 .data(dataPoints)
                 .enter()
                 .append("circle")
                 .attr("class", "plotting")
-                .attr("cx", function (d) { return d.x; })
-                .attr("cy", function (d) { return d.y; })
-                .attr("r", 2);
+                .attr("cx", function (d) { return xToPixel(d.x); })
+                .attr("cy", function (d) { return yToPixel(d.y); })
+                .attr("r", 2)
+                .on("mouseover", tip.show)
+                .on("mouseout", tip.hide);
 
             canvas.selectAll('.plotting').style({'stroke': 'blue'});
+            detached.selectAll('.d3-tip')
+                .style({
+                    'background': 'rgba(0, 0, 0, 0.8)',
+                    'line-height': '1.5',
+                    'font-weight': 'bold',
+                    'font-size': '8pt',
+                    'color': '#fff',
+                    'padding': '10px',
+                    'border-radius': '2px'
+                });
 
             runtime.getParam("current-animation-port")(detached.node());
         },
@@ -858,15 +886,6 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                     yMax = jsnums.add(yMax, 1);
                 }
 
-                var xToPixel = numLib.scaler(xMin, xMax, 0, WIDTH - 1, true),
-                    yToPixel = numLib.scaler(yMin, yMax, HEIGHT - 1, 0, true);
-
-                dataPoints = dataPoints.map(
-                    function (d) {
-                        return {'x': xToPixel(d.x), 'y': yToPixel(d.y)};
-                    }
-                );
-
                 scatterPlot.plot(runtime, xMin, xMax, yMin, yMax,
                                  WIDTH, HEIGHT, dataPoints);
             };
@@ -904,7 +923,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
             var tip = d3tip(detached)
                     .attr('class', 'd3-tip')
                     .direction('e')
-                    .offset([-30, 0])
+                    .offset([0, 20])
                     .html(function (d) {
                         var maxVal = myFormatter(d.reduce(numLib.max), 6);
                         var minVal = myFormatter(d.reduce(numLib.min), 6);
