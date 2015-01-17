@@ -782,14 +782,14 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
          * http://alignedleft.com/tutorials/d3/making-a-scatterplot
          */
         plot: function(
-            runtime, xMin, xMax, yMin, yMax, width, height, dataPoints) {
+            runtime, xMin, xMax, yMin, yMax, width, height,
+            dataPoints, canvasObj) {
 
-            var xToPixel = numLib.scaler(xMin, xMax, 0, WIDTH - 1, true),
-                yToPixel = numLib.scaler(yMin, yMax, HEIGHT - 1, 0, true);
+            var xToPixel = numLib.scaler(xMin, xMax, 0, width - 1, true),
+                yToPixel = numLib.scaler(yMin, yMax, height - 1, 0, true);
 
-            var canvasObj = createCanvas(width, height);
-            var detached = canvasObj.detached;
             var canvas = canvasObj.canvas;
+            var detached = canvasObj.detached;
             canvas = appendAxis(canvas, xMin, xMax, yMin, yMax, width, height);
 
             var tip = d3tip(detached)
@@ -816,7 +816,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                 .on("mouseover", tip.show)
                 .on("mouseout", tip.hide);
 
-            canvas.selectAll('.plotting').style({'stroke': 'blue'});
+            canvas.selectAll('.plotting').style('stroke', 'blue');
             detached.selectAll('.d3-tip')
                 .style({
                     'background': 'rgba(0, 0, 0, 0.8)',
@@ -831,9 +831,26 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
             runtime.getParam("current-animation-port")(detached.node());
         },
 
+        plotWithLine: function(canvas, dataPoints) {
+            var line = d3.svg.line()
+                    .x(function (d) { return d.x; })
+                    .y(function (d) { return d.y; });
+
+            dataPoints.forEach(
+                function (groupedPoints) {
+                    canvas.append("path")
+                        .attr("class", "plotting")
+                        .attr("d", line(groupedPoints));
+                }
+            );
+
+            return canvas.selectAll('.plotting').style(
+                {'stroke': 'blue', 'stroke-width': 1, 'fill': 'none'});
+        },
 
         scatterPlot: function(runtime, ffi) {
             return function (lst) {
+                runtime.checkArity(1, arguments, "scatter-plot");
                 runtime.checkList(lst);
 
                 var dataPoints = ffi.toArray(lst).map(
@@ -887,7 +904,77 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                 }
 
                 scatterPlot.plot(runtime, xMin, xMax, yMin, yMax,
-                                 WIDTH, HEIGHT, dataPoints);
+                                 WIDTH, HEIGHT, dataPoints,
+                                 createCanvas(WIDTH, HEIGHT));
+            };
+        },
+
+        linearRegression: function(runtime, ffi) {
+            return function (lst, f) {
+                runtime.checkArity(2, arguments, "linear-regression");
+                runtime.checkList(lst);
+                runtime.checkFunction(f);
+
+                var dataPoints = ffi.toArray(lst).map(
+                    function (e) {
+                        // TODO: check that e is a posn?
+                        return {
+                            'x': runtime.getField(e, "x"),
+                            'y': runtime.getField(e, "y")
+                        };
+                    }
+                );
+
+                if (dataPoints.length === 0) {
+                    runtime.throwMessageException("There must be at least " +
+                                                  "one point in the list.");
+                }
+
+                var xMin = dataPoints
+                        .map( function (d) { return d.x; } )
+                        .reduce(numLib.min);
+                var xMax = dataPoints
+                        .map( function (d) { return d.x; } )
+                        .reduce(numLib.max);
+                var yMin = dataPoints
+                        .map( function (d) { return d.y; } )
+                        .reduce(numLib.min);
+                var yMax = dataPoints
+                        .map( function (d) { return d.y; } )
+                        .reduce(numLib.max);
+
+                var blockPortion = 10;
+                var xOneBlock = jsnums.divide(jsnums.subtract(xMax, xMin),
+                                              blockPortion);
+                var yOneBlock = jsnums.divide(jsnums.subtract(yMax, yMin),
+                                              blockPortion);
+
+                xMin = jsnums.subtract(xMin, xOneBlock);
+                xMax = jsnums.add(xMax, xOneBlock);
+                yMin = jsnums.subtract(yMin, yOneBlock);
+                yMax = jsnums.add(yMax, yOneBlock);
+
+                // Plotting 1 point should be possible
+                // but we need a wider range
+                if (jsnums.equals(xMin, xMax)) {
+                    xMin = jsnums.subtract(xMin, 1);
+                    xMax = jsnums.add(xMax, 1);
+                }
+                if (jsnums.equals(yMin, yMax)) {
+                    yMin = jsnums.subtract(yMin, 1);
+                    yMax = jsnums.add(yMax, 1);
+                }
+
+                var canvasObj = createCanvas(WIDTH, HEIGHT);
+                scatterPlot.plotWithLine(canvasObj.canvas,
+                                         xyPlot.getDataRough(f, xMin, xMax,
+                                                             yMin, yMax,
+                                                             WIDTH, HEIGHT));
+
+                scatterPlot.plot(runtime, xMin, xMax, yMin, yMax,
+                                 WIDTH, HEIGHT, dataPoints,
+                                 canvasObj);
+
             };
         }
     };
@@ -952,9 +1039,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                     'fill': 'steelblue',
                     'fill-opacity': '0.8',
                     'shape-rendering': 'crispEdges'
-                });
-
-            canvas.selectAll('.bar rect')
+                })
                 .on('mouseover', function(d) {
                     d3.select(this).style('fill', "black");
                 })
@@ -1037,6 +1122,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
         'xyPlot': xyPlot.xyPlot,
         'xyPlotCont': xyPlot.xyPlotCont,
         'scatterPlot': scatterPlot.scatterPlot,
+        'linearRegression': scatterPlot.linearRegression,
         'histogramPlot': histogramPlot.histogramPlot,
         'showSVG': showSVG,
         'test': test
