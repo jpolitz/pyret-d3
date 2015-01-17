@@ -137,8 +137,12 @@ function LogTable(n) {
     };
 };
 
-define(["d3", "js/js-numbers"], function (d3, jsnums) {
+define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
     var numLib = {
+        /*
+         * Utility for jsnums
+         */
+
         'scaler': function(oldX, oldY, newX, newY, toInt) {
             /*
              * Produces a scaler function to convert a value in
@@ -216,6 +220,37 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         }
     };
 
+    function myFormatter(num, digit) {
+        if (num.toString().length > digit) {
+            var fixnum = jsnums.toFixnum(num);
+            if (fixnum.toString().length > digit) {
+                // digit - 2 because we might have '.' and '-'
+                var digitRounded = digit;
+                if (fixnum < 0) {
+                    digitRounded--;
+                }
+                if (fixnum.toString().indexOf(".") !== -1) {
+                    digitRounded--;
+                }
+                var fixnumRounded = d3.format('.' + digitRounded + 'r')(fixnum);
+                // d3 always cast the result of format to
+                // string and .r formatter could give NaN
+                if ((fixnumRounded === "NaN") ||
+                    (fixnumRounded.length > digit)) {
+                    // use only 3 position because this notation
+                    // has xxx.xxxe+.. ~ 9 digits
+                    return d3.format('.3e')(fixnum);
+                } else {
+                    return fixnumRounded;
+                }
+            } else {
+                return fixnum;
+            }
+        } else {
+            return num;
+        }
+    }
+
     function createCanvas(width, height) {
         /*
          * Creates a canvas and detached node
@@ -225,7 +260,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
          * @return {Object} an object containing 'detached' which has
          * a detached node and 'canvas' which has a canvas
          */
-        var margin = {'top': 30, 'left': 70, 'bottom': 30, 'right': 70};
+        var margin = {'top': 30, 'left': 90, 'bottom': 45, 'right': 90};
 
         var detached = d3.select(document.createElement("div"));
         var canvas = detached
@@ -285,31 +320,11 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         var xAxisDisplayScaler = numLib.scaler(0, tickNum, xMin, xMax),
             yAxisDisplayScaler = numLib.scaler(0, tickNum, yMin, yMax);
 
-        var STR_LENGTH_MAX = 10;
-
         var xAxis = d3.svg.axis().scale(xAxisScaler)
                 .orient((xAxisConf.pos === 0) ? "top" : "bottom")
                 .tickValues(allValues).tickFormat(
                     function (d, i) {
-                        var ret = xAxisDisplayScaler(i);
-                        if (ret.toString().length > STR_LENGTH_MAX) {
-                            var fixnum = jsnums.toFixnum(ret);
-                            if (fixnum.toString().length > STR_LENGTH_MAX) {
-                                var fixnumRounded = d3.format('.9r')(ret);
-                                // d3 always cast the result of format to
-                                // string and .r formatter could give NaN
-                                if ((fixnumRounded === "NaN") ||
-                                    (fixnumRounded.length > STR_LENGTH_MAX)) {
-                                    return d3.format('.3e')(fixnum);
-                                } else {
-                                    return fixnumRounded;
-                                }
-                            } else {
-                                return fixnum;
-                            }
-                        } else {
-                            return ret;
-                        }
+                        return myFormatter(xAxisDisplayScaler(i), 10);
                     });
 
         canvas.append("g")
@@ -322,12 +337,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                 .orient((yAxisConf.pos === 1) ? "right" : "left")
                 .tickValues(allValues).tickFormat(
                     function (d, i) {
-                        var ret = yAxisDisplayScaler(i);
-                        if (ret.toString().length > STR_LENGTH_MAX) {
-                            return d3.format('.3e')(jsnums.toFixnum(ret));
-                        } else {
-                            return ret;
-                        }
+                        return myFormatter(yAxisDisplayScaler(i), 10);
                     });
 
         canvas.append("g")
@@ -365,6 +375,13 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
     }
 
     var xyPlot = {
+        /*
+         * Plot a function
+         *
+         * Part of this function is adapted from
+         * http://jsfiddle.net/christopheviau/Hwpe3/
+         */
+
         'constant': {
             'rangeError': "x-min and y-min must be strictly less than " +
                 "x-max and y-max respectively."
@@ -372,8 +389,6 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
 
         'plot': function(
             runtime, xMin, xMax, yMin, yMax, width, height, dataPoints) {
-            // Plots a graph
-            // These are adapted from http://jsfiddle.net/christopheviau/Hwpe3/
 
             var canvasObj = createCanvas(width, height);
             var detached = canvasObj.detached;
@@ -568,7 +583,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
                     return {
                         'logTable': logTable,
                         'dataPoints': [
-                            {'x': left.x, 'y': left.y, 'cont': true},
+                            {'x': left.x, 'y': left.y, 'cont': false},
                             {'x': right.x, 'y': right.y, 'cont': true}
                         ] // really? why the left point should have cont=true?
                     };
@@ -759,6 +774,12 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
     };
 
     var scatterPlot = {
+        /*
+         * Scatter plot
+         *
+         * Part of this function is adapted from
+         * http://alignedleft.com/tutorials/d3/making-a-scatterplot
+         */
         plot: function(
             runtime, xMin, xMax, yMin, yMax, width, height, dataPoints) {
 
@@ -851,6 +872,130 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
         }
     };
 
+    var histogramPlot = {
+        /*
+         * Plot a histogram
+         *
+         * Part of this function is adapted from
+         * http://www.frankcleary.com/making-an-interactive-histogram-in-d3-js/
+         */
+
+        'constant': {
+            'MAXN': 100
+        },
+
+        plot: function(
+            runtime, xMin, xMax, yMin, yMax, width, height, data) {
+
+            var canvasObj = createCanvas(width, height);
+            var detached = canvasObj.detached;
+            var canvas = canvasObj.canvas;
+            canvas = appendAxis(canvas, xMin, xMax, yMin, yMax, width, height);
+
+            var x = d3.scale.linear()
+                    .domain([0, histogramPlot.constant.MAXN])
+                    .range([0, width]);
+
+            var y = d3.scale.linear()
+                    .domain([0, d3.max(data, function(d) { return d.y; })])
+                    .range([height, 0]);
+
+            var tip = d3tip(detached)
+                    .attr('class', 'd3-tip')
+                    .direction('e')
+                    .offset([-30, 0])
+                    .html(function(d) {
+                        var maxVal = d.reduce(numLib.max);
+                        var minVal = d.reduce(numLib.min);
+                        return "min: " + myFormatter(minVal, 6).toString() + "<br />" +
+                               "max: " + myFormatter(maxVal, 6).toString() + "<br />" +
+                               "freq: " + d.y;
+                    });
+
+            canvas.call(tip);
+
+            var bar = canvas.selectAll(".bar")
+                    .data(data)
+                    .enter().append("g")
+                    .attr("class", "bar")
+                    .attr("transform", function(d) {
+                        return "translate(" + x(d.x) + "," + y(d.y) + ")";
+                    })
+                    .on("mouseover", tip.show)
+                    .on("mouseout", tip.hide);
+
+            bar.append("rect")
+                .attr("x", 1)
+                .attr("width", x(data[0].dx) - 1)
+                .attr("height", function(d) { return height - y(d.y); });
+
+            canvas.selectAll('.bar rect')
+                .style({
+                    'fill': 'steelblue',
+                    'fill-opacity': '0.8',
+                    'shape-rendering': 'crispEdges'
+                });
+
+            canvas.selectAll('.bar rect')
+                .on('mouseover', function(d) {
+                        d3.select(this).style('fill', "black");
+                })
+                .on('mouseout', function(d) {
+                        d3.select(this).style('fill', "steelblue");
+                });
+
+            detached.selectAll('.d3-tip')
+                .style({
+                    'background': 'rgba(0, 0, 0, 0.8)',
+                    'line-height': '1.5',
+                    'font-weight': 'bold',
+                    'font-size': '8pt',
+                    'color': '#fff',
+                    'padding': '10px',
+                    'border-radius': '2px'
+                });
+
+            runtime.getParam("current-animation-port")(detached.node());
+        },
+
+
+        histogramPlot: function(runtime, ffi) {
+            return function (lst, n) {
+                runtime.checkList(lst);
+                runtime.checkNumber(n);
+
+                if ((!jsnums.isInteger(n)) ||
+                    (n < 1) ||
+                    (n > histogramPlot.constant.MAXN)) {
+                    runtime.throwMessageException("n must be an interger " +
+                                                  "between 1 and 100");
+                }
+
+                var data = ffi.toArray(lst);
+
+                if (data.length === 0) {
+                    runtime.throwMessageException("There must be at least " +
+                                                  "one Number in the list.");
+                }
+
+                var xMin = data.reduce(numLib.min);
+                var xMax = data.reduce(numLib.max);
+                var dataScaler = numLib.scaler(
+                    xMin, xMax, 0, histogramPlot.constant.MAXN, false);
+
+                var histogramData = d3.layout.histogram()
+                        .bins(n).value(function (val) {
+                            return jsnums.toFixnum(dataScaler(val));
+                        })(data);
+
+                var yMax = d3.max(histogramData, function(d) { return d.y; });
+
+                histogramPlot.plot(runtime, xMin, xMax, 0, yMax,
+                                   WIDTH, HEIGHT, histogramData);
+            };
+        }
+    };
+
     function showSVG(runtime) {
         return function (xml) {
             /*
@@ -865,16 +1010,16 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
     }
 
     function test(runtime) {
-        return function (x, y) {
-            console.log(jsnums.greaterThan(x, y));
+        return function () {
         };
     }
 
     return {
-        xyPlot: xyPlot.xyPlot,
-        xyPlotCont: xyPlot.xyPlotCont,
-        scatterPlot: scatterPlot.scatterPlot,
-        showSVG: showSVG,
-        test: test
+        'xyPlot': xyPlot.xyPlot,
+        'xyPlotCont': xyPlot.xyPlotCont,
+        'scatterPlot': scatterPlot.scatterPlot,
+        'histogramPlot': histogramPlot.histogramPlot,
+        'showSVG': showSVG,
+        'test': test
     };
 });
