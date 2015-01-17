@@ -81,16 +81,16 @@ function FenwickTree(n) {
 };
 
 /*
-var testFenwick = new FenwickTree(10);
-testFenwick.add(1, 2);
-assert(testFenwick.sumInterval(1, 10) === 2);
-testFenwick.add(1, 3);
-assert(testFenwick.sumInterval(1, 10) === 5);
-testFenwick.add(3, 4);
-assert(testFenwick.sumInterval(1, 10) === 9);
-assert(testFenwick.sumInterval(1, 2) === 5);
-assert(testFenwick.sumInterval(2, 3) === 4);
-*/
+ var testFenwick = new FenwickTree(10);
+ testFenwick.add(1, 2);
+ assert(testFenwick.sumInterval(1, 10) === 2);
+ testFenwick.add(1, 3);
+ assert(testFenwick.sumInterval(1, 10) === 5);
+ testFenwick.add(3, 4);
+ assert(testFenwick.sumInterval(1, 10) === 9);
+ assert(testFenwick.sumInterval(1, 2) === 5);
+ assert(testFenwick.sumInterval(2, 3) === 4);
+ */
 
 function LogTable(n) {
     /*
@@ -225,14 +225,15 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
             var fixnum = jsnums.toFixnum(num);
             if (fixnum.toString().length > digit) {
                 // digit - 2 because we might have '.' and '-'
-                var digitRounded = digit;
+                var digitRounded = digit - 1;
                 if (fixnum < 0) {
                     digitRounded--;
                 }
                 if (fixnum.toString().indexOf(".") !== -1) {
                     digitRounded--;
                 }
-                var fixnumRounded = d3.format('.' + digitRounded + 'r')(fixnum);
+                var fixnumRounded = d3
+                        .format('.' + digitRounded + 'r')(fixnum);
                 // d3 always cast the result of format to
                 // string and .r formatter could give NaN
                 if ((fixnumRounded === "NaN") ||
@@ -260,7 +261,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
          * @return {Object} an object containing 'detached' which has
          * a detached node and 'canvas' which has a canvas
          */
-        var margin = {'top': 30, 'left': 90, 'bottom': 45, 'right': 90};
+        var margin = {'top': 30, 'left': 100, 'bottom': 45, 'right': 100};
 
         var detached = d3.select(document.createElement("div"));
         var canvas = detached
@@ -564,10 +565,10 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
             }).reverse();
 
             /*
-            stackInit = [{
-                'left': lastElement(stackInit).left,
-                'right': stackInit[0].right, 'stage': INSERTLEFT
-            }];
+             stackInit = [{
+             'left': lastElement(stackInit).left,
+             'right': stackInit[0].right, 'stage': INSERTLEFT
+             }];
              */
 
             function fillVertical(left, right, logTable, depth) {
@@ -678,7 +679,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                 if (groupedPoints.length > 0) {
                     var prev = lastElement(groupedPoints);
                     if ((!d.cont) && ((Math.abs(d.y - prev.y) > dyTolerate) ||
-                        ((d.x - prev.x) > 1))) {
+                                      ((d.x - prev.x) > 1))) {
                         dataPoints.push([d]);
                     } else {
                         groupedPoints.push(d);
@@ -904,12 +905,12 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                     .attr('class', 'd3-tip')
                     .direction('e')
                     .offset([-30, 0])
-                    .html(function(d) {
-                        var maxVal = d.reduce(numLib.max);
-                        var minVal = d.reduce(numLib.min);
-                        return "min: " + myFormatter(minVal, 6).toString() + "<br />" +
-                               "max: " + myFormatter(maxVal, 6).toString() + "<br />" +
-                               "freq: " + d.y;
+                    .html(function (d) {
+                        var maxVal = myFormatter(d.reduce(numLib.max), 6);
+                        var minVal = myFormatter(d.reduce(numLib.min), 6);
+                        return "min: " + minVal.toString() + "<br />" +
+                            "max: " + maxVal.toString() + "<br />" +
+                            "freq: " + d.y;
                     });
 
             canvas.call(tip);
@@ -938,10 +939,10 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
 
             canvas.selectAll('.bar rect')
                 .on('mouseover', function(d) {
-                        d3.select(this).style('fill', "black");
+                    d3.select(this).style('fill', "black");
                 })
                 .on('mouseout', function(d) {
-                        d3.select(this).style('fill', "steelblue");
+                    d3.select(this).style('fill', "steelblue");
                 });
 
             detached.selectAll('.d3-tip')
@@ -968,7 +969,8 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                     (n < 1) ||
                     (n > histogramPlot.constant.MAXN)) {
                     runtime.throwMessageException("n must be an interger " +
-                                                  "between 1 and 100");
+                                                  "between 1 and " +
+                                                  histogramPlot.constant.MAXN);
                 }
 
                 var data = ffi.toArray(lst);
