@@ -853,7 +853,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
 
         regressionPlot: function(runtime, ffi) {
             return function (lst, f, label) {
-                runtime.checkArity(3, arguments, "linear-regression");
+                runtime.checkArity(3, arguments, "regression-plot");
                 runtime.checkList(lst);
                 runtime.checkFunction(f);
                 runtime.checkString(label);
@@ -1059,8 +1059,29 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
         };
     }
 
-    function test(runtime) {
-        return function () {
+    function getBBox(runtime) {
+        return function (xml) {
+            var parser = new DOMParser();
+            var svg = parser.parseFromString(
+                xml, "image/svg+xml").documentElement;
+            var div = d3.select('.dummydiv');
+            if (div.empty()) {
+                div = d3.select(document.createElement('div'))
+                    .attr('class', 'dummydiv');
+                document.body.appendChild(div.node());
+            } else {
+                div.selectAll('svg').remove();
+            }
+            div.node().appendChild(svg);
+            var bbox = div.select('svg').node().getBBox();
+            var ret = runtime.makeObject({
+                'height': bbox.height,
+                'width': bbox.width,
+                'x': bbox.x,
+                'y': bbox.y
+            });
+            div.selectAll('svg').remove();
+            return ret;
         };
     }
 
@@ -1070,6 +1091,6 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
         'regressionPlot': scatterPlot.regressionPlot,
         'histogramPlot': histogramPlot.histogramPlot,
         'showSVG': showSVG,
-        'test': test
+        'getBBox': getBBox
     };
 });

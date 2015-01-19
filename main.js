@@ -21,7 +21,7 @@ define(["js/runtime-util", "my-project/lib", "js/ffi-helpers"],
                    "histogram-plot": runtime.makeFunction(
                        lib.histogramPlot(runtime, ffi)),
                    "show-svg": runtime.makeFunction(lib.showSVG(runtime)),
-                   "test": runtime.makeFunction(lib.test(runtime))
+                   "getBBox": runtime.makeFunction(lib.getBBox(runtime))
                });
            };
        });
