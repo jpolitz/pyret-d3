@@ -16,10 +16,8 @@ define(["js/runtime-util", "my-project/lib", "js/ffi-helpers"],
                    "xy-plot": runtime.makeFunction(lib.xyPlot(runtime)),
                    "xy-plot-cont": runtime.makeFunction(
                        lib.xyPlotCont(runtime)),
-                   "scatter-plot": runtime.makeFunction(
-                       lib.scatterPlot(runtime, ffi)),
-                   "linear-regression": runtime.makeFunction(
-                       lib.linearRegression(runtime, ffi)),
+                   "regression-plot": runtime.makeFunction(
+                       lib.regressionPlot(runtime, ffi)),
                    "histogram-plot": runtime.makeFunction(
                        lib.histogramPlot(runtime, ffi)),
                    "show-svg": runtime.makeFunction(lib.showSVG(runtime)),

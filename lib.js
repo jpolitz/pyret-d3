@@ -252,10 +252,20 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
         }
     }
 
-    function createCanvas(width, height) {
+    function createDiv() {
+        /*
+         * Creates a blank div
+         *
+         * @return {d3 selection}
+         */
+        return d3.select(document.createElement("div"));
+    }
+
+    function createCanvas(detached, width, height) {
         /*
          * Creates a canvas and detached node
          *
+         * @param {d3 selection} detached
          * @param {fixnum} width: in pixel
          * @param {fixnum} height: in pixel
          * @return {Object} an object containing 'detached' which has
@@ -263,21 +273,23 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
          */
         var margin = {'top': 30, 'left': 100, 'bottom': 45, 'right': 100};
 
-        var detached = d3.select(document.createElement("div"));
-        var canvas = detached
-                .append("svg")
-                .attr("width", width + margin.left + margin.right)
-                .attr("height", height + margin.top + margin.bottom)
-                .append("g")
-                .attr(
-                    "transform",
-                    "translate(" + margin.left + "," + margin.top + ")");
-        return {'detached': detached, 'canvas': canvas};
+        return detached
+            .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr(
+                "transform",
+                "translate(" + margin.left + "," + margin.top + ")");
+    }
+
+    function callBigBang(runtime, detached) {
+        runtime.getParam("current-animation-port")(detached.node());
     }
 
     function appendAxis(canvas, xMin, xMax, yMin, yMax, width, height) {
         /*
-         * Produces a new canvas which has axis on
+         * Appends axes to canvas (this mutates the canvas)
          *
          * @param {d3 selection} canvas
          * @param {jsnums} xMin
@@ -286,7 +298,6 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
          * @param {jsnums} yMax
          * @param {fixnum} width
          * @param {fixnum} height
-         * @return {d3 selection}
          */
 
         function getAxisConf(aMin, aMax) {
@@ -371,8 +382,6 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
             'stroke': 'lightgray',
             'opacity': 0.6
         });
-
-        return canvas;
     }
 
     var xyPlot = {
@@ -388,14 +397,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                 "x-max and y-max respectively."
         },
 
-        'plot': function(
-            runtime, xMin, xMax, yMin, yMax, width, height, dataPoints) {
-
-            var canvasObj = createCanvas(width, height);
-            var detached = canvasObj.detached;
-            var canvas = canvasObj.canvas;
-            canvas = appendAxis(canvas, xMin, xMax, yMin, yMax, width, height);
-
+        'plotLine': function(canvas, dataPoints) {
             var line = d3.svg.line()
                     .x(function (d) { return d.x; })
                     .y(function (d) { return d.y; });
@@ -410,10 +412,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
 
             canvas.selectAll('.plotting').style(
                 {'stroke': 'blue', 'stroke-width': 1, 'fill': 'none'});
-
-            runtime.getParam("current-animation-port")(detached.node());
         },
-
 
         'findMidPoint': function (left, right, xToPixel, yToPixel,
                                   f, yMin, yMax) {
@@ -744,10 +743,16 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                     jsnums.greaterThanOrEqual(yMin, yMax)) {
                     runtime.throwMessageException(xyPlot.constants.rangeError);
                 }
-                xyPlot.plot(
-                    runtime, xMin, xMax, yMin, yMax, WIDTH, HEIGHT,
-                    xyPlot.getDataBisect(f, xMin, xMax, yMin, yMax,
-                                         WIDTH, HEIGHT));
+
+                var detached = createDiv();
+                var canvas = createCanvas(detached, WIDTH, HEIGHT);
+                appendAxis(canvas, xMin, xMax, yMin, yMax, WIDTH, HEIGHT);
+
+                xyPlot.plotLine(canvas, xyPlot.getDataBisect(f, xMin, xMax,
+                                                             yMin, yMax,
+                                                             WIDTH, HEIGHT));
+
+                callBigBang(runtime, detached);
             };
         },
 
@@ -766,10 +771,16 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                     jsnums.greaterThanOrEqual(yMin, yMax)) {
                     runtime.throwMessageException(xyPlot.constants.rangeError);
                 }
-                xyPlot.plot(
-                    runtime, xMin, xMax, yMin, yMax, WIDTH, HEIGHT,
-                    xyPlot.getDataRough(f, xMin, xMax, yMin, yMax,
-                                        WIDTH, HEIGHT));
+
+                var detached = createDiv();
+                var canvas = createCanvas(detached, WIDTH, HEIGHT);
+                appendAxis(canvas, xMin, xMax, yMin, yMax, WIDTH, HEIGHT);
+
+                xyPlot.plotLine(canvas, xyPlot.getDataRough(f, xMin, xMax,
+                                                            yMin, yMax,
+                                                            WIDTH, HEIGHT));
+
+                callBigBang(runtime, detached);
             };
         }
     };
@@ -781,16 +792,12 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
          * Part of this function is adapted from
          * http://alignedleft.com/tutorials/d3/making-a-scatterplot
          */
-        plot: function(
-            runtime, xMin, xMax, yMin, yMax, width, height,
-            dataPoints, canvasObj) {
+        plotPoints: function(
+            xMin, xMax, yMin, yMax, width, height,
+            dataPoints, detached, canvas) {
 
             var xToPixel = numLib.scaler(xMin, xMax, 0, width - 1, true),
                 yToPixel = numLib.scaler(yMin, yMax, height - 1, 0, true);
-
-            var canvas = canvasObj.canvas;
-            var detached = canvasObj.detached;
-            canvas = appendAxis(canvas, xMin, xMax, yMin, yMax, width, height);
 
             var tip = d3tip(detached)
                     .attr('class', 'd3-tip')
@@ -817,6 +824,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                 .on("mouseout", tip.hide);
 
             canvas.selectAll('.plotting').style('stroke', 'blue');
+
             detached.selectAll('.d3-tip')
                 .style({
                     'background': 'rgba(0, 0, 0, 0.8)',
@@ -827,93 +835,28 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                     'padding': '10px',
                     'border-radius': '2px'
                 });
-
-            runtime.getParam("current-animation-port")(detached.node());
         },
 
-        plotWithLine: function(canvas, dataPoints) {
-            var line = d3.svg.line()
-                    .x(function (d) { return d.x; })
-                    .y(function (d) { return d.y; });
+        'showEquation': function(detached, label) {
+            detached.append('div')
+                    .attr('class', 'equation')
+                    .html(label);
 
-            dataPoints.forEach(
-                function (groupedPoints) {
-                    canvas.append("path")
-                        .attr("class", "plotting")
-                        .attr("d", line(groupedPoints));
-                }
-            );
-
-            return canvas.selectAll('.plotting').style(
-                {'stroke': 'blue', 'stroke-width': 1, 'fill': 'none'});
+            detached.selectAll('.equation sup').style({
+                'top': '-0.5em',
+                'position': 'relative',
+                'font-size': '75%',
+                'line-height': '0',
+                'vertical-align': 'baseline'
+            });
         },
 
-        scatterPlot: function(runtime, ffi) {
-            return function (lst) {
-                runtime.checkArity(1, arguments, "scatter-plot");
-                runtime.checkList(lst);
-
-                var dataPoints = ffi.toArray(lst).map(
-                    function (e) {
-                        // TODO: check that e is a posn?
-                        return {
-                            'x': runtime.getField(e, "x"),
-                            'y': runtime.getField(e, "y")
-                        };
-                    }
-                );
-
-                if (dataPoints.length === 0) {
-                    runtime.throwMessageException("There must be at least " +
-                                                  "one point in the list.");
-                }
-
-                var xMin = dataPoints
-                        .map( function (d) { return d.x; } )
-                        .reduce(numLib.min);
-                var xMax = dataPoints
-                        .map( function (d) { return d.x; } )
-                        .reduce(numLib.max);
-                var yMin = dataPoints
-                        .map( function (d) { return d.y; } )
-                        .reduce(numLib.min);
-                var yMax = dataPoints
-                        .map( function (d) { return d.y; } )
-                        .reduce(numLib.max);
-
-                var blockPortion = 10;
-                var xOneBlock = jsnums.divide(jsnums.subtract(xMax, xMin),
-                                              blockPortion);
-                var yOneBlock = jsnums.divide(jsnums.subtract(yMax, yMin),
-                                              blockPortion);
-
-                xMin = jsnums.subtract(xMin, xOneBlock);
-                xMax = jsnums.add(xMax, xOneBlock);
-                yMin = jsnums.subtract(yMin, yOneBlock);
-                yMax = jsnums.add(yMax, yOneBlock);
-
-                // Plotting 1 point should be possible
-                // but we need a wider range
-                if (jsnums.equals(xMin, xMax)) {
-                    xMin = jsnums.subtract(xMin, 1);
-                    xMax = jsnums.add(xMax, 1);
-                }
-                if (jsnums.equals(yMin, yMax)) {
-                    yMin = jsnums.subtract(yMin, 1);
-                    yMax = jsnums.add(yMax, 1);
-                }
-
-                scatterPlot.plot(runtime, xMin, xMax, yMin, yMax,
-                                 WIDTH, HEIGHT, dataPoints,
-                                 createCanvas(WIDTH, HEIGHT));
-            };
-        },
-
-        linearRegression: function(runtime, ffi) {
-            return function (lst, f) {
-                runtime.checkArity(2, arguments, "linear-regression");
+        regressionPlot: function(runtime, ffi) {
+            return function (lst, f, label) {
+                runtime.checkArity(3, arguments, "linear-regression");
                 runtime.checkList(lst);
                 runtime.checkFunction(f);
+                runtime.checkString(label);
 
                 var dataPoints = ffi.toArray(lst).map(
                     function (e) {
@@ -965,16 +908,19 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                     yMax = jsnums.add(yMax, 1);
                 }
 
-                var canvasObj = createCanvas(WIDTH, HEIGHT);
-                scatterPlot.plotWithLine(canvasObj.canvas,
-                                         xyPlot.getDataRough(f, xMin, xMax,
-                                                             yMin, yMax,
-                                                             WIDTH, HEIGHT));
+                var detached = createDiv();
+                var canvas = createCanvas(detached, WIDTH, HEIGHT);
+                appendAxis(canvas, xMin, xMax, yMin, yMax, WIDTH, HEIGHT);
 
-                scatterPlot.plot(runtime, xMin, xMax, yMin, yMax,
-                                 WIDTH, HEIGHT, dataPoints,
-                                 canvasObj);
+                scatterPlot.plotPoints(xMin, xMax, yMin, yMax, WIDTH, HEIGHT,
+                                       dataPoints, detached, canvas);
 
+                xyPlot.plotLine(canvas, xyPlot.getDataRough(f, xMin, xMax,
+                                                            yMin, yMax,
+                                                            WIDTH, HEIGHT));
+                scatterPlot.showEquation(detached, label);
+
+                callBigBang(runtime, detached);
             };
         }
     };
@@ -991,13 +937,8 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
             'MAXN': 100
         },
 
-        plot: function(
-            runtime, xMin, xMax, yMin, yMax, width, height, data) {
-
-            var canvasObj = createCanvas(width, height);
-            var detached = canvasObj.detached;
-            var canvas = canvasObj.canvas;
-            canvas = appendAxis(canvas, xMin, xMax, yMin, yMax, width, height);
+        'plotBar': function(
+            xMin, xMax, yMin, yMax, width, height, data, detached, canvas) {
 
             var x = d3.scale.linear()
                     .domain([0, histogramPlot.constant.MAXN])
@@ -1057,8 +998,6 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                     'padding': '10px',
                     'border-radius': '2px'
                 });
-
-            runtime.getParam("current-animation-port")(detached.node());
         },
 
 
@@ -1094,8 +1033,15 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
 
                 var yMax = d3.max(histogramData, function(d) { return d.y; });
 
-                histogramPlot.plot(runtime, xMin, xMax, 0, yMax,
-                                   WIDTH, HEIGHT, histogramData);
+                var detached = createDiv();
+                var canvas = createCanvas(detached, WIDTH, HEIGHT);
+
+                appendAxis(canvas, xMin, xMax, 0, yMax, WIDTH, HEIGHT);
+
+                histogramPlot.plotBar(xMin, xMax, 0, yMax, WIDTH, HEIGHT,
+                                      histogramData, detached, canvas);
+
+                callBigBang(runtime, detached);
             };
         }
     };
@@ -1121,8 +1067,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
     return {
         'xyPlot': xyPlot.xyPlot,
         'xyPlotCont': xyPlot.xyPlotCont,
-        'scatterPlot': scatterPlot.scatterPlot,
-        'linearRegression': scatterPlot.linearRegression,
+        'regressionPlot': scatterPlot.regressionPlot,
         'histogramPlot': histogramPlot.histogramPlot,
         'showSVG': showSVG,
         'test': test
