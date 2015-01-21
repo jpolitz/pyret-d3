@@ -8,9 +8,11 @@ requirejs.config({
 });
 requirejs.undef("@js-http/" + baseUrl + "main.js");
 requirejs.undef("my-project/lib");
-define(["js/runtime-util", "my-project/lib", "js/ffi-helpers"],
-       function(util, lib, ffiLib) {
+define(["js/runtime-util", "my-project/lib", "js/ffi-helpers",
+        "trove/string-dict"],
+       function(util, lib, ffiLib, sdLib) {
            return function(runtime, namespace) {
+               var sd = sdLib(runtime, runtime.namespace);
                var ffi = ffiLib(runtime, runtime.namespace);
                return util.makeModuleReturn(runtime, {}, {
                    "xy-plot": runtime.makeFunction(lib.xyPlot(runtime)),
@@ -20,8 +22,11 @@ define(["js/runtime-util", "my-project/lib", "js/ffi-helpers"],
                        lib.regressionPlot(runtime, ffi)),
                    "histogram-plot": runtime.makeFunction(
                        lib.histogramPlot(runtime, ffi)),
+                   "pie-chart": runtime.makeFunction(
+                       lib.pieChart(runtime, sd)),
                    "show-svg": runtime.makeFunction(lib.showSVG(runtime)),
-                   "getBBox": runtime.makeFunction(lib.getBBox(runtime))
+                   "getBBox": runtime.makeFunction(lib.getBBox(runtime)),
+                   "test": runtime.makeFunction(lib.test(runtime, sd))
                });
            };
        });

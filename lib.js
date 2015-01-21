@@ -1003,6 +1003,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
 
         histogramPlot: function(runtime, ffi) {
             return function (lst, n) {
+                runtime.checkArity(2, arguments, "histogram-plot");
                 runtime.checkList(lst);
                 runtime.checkNumber(n);
 
@@ -1040,6 +1041,79 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
 
                 histogramPlot.plotBar(xMin, xMax, 0, yMax, WIDTH, HEIGHT,
                                       histogramData, detached, canvas);
+
+                callBigBang(runtime, detached);
+            };
+        }
+    };
+
+    var pieChart = {
+        /*
+         * Part of this function is adapted from:
+         * http://bl.ocks.org/mbostock/3887235
+         */
+        'pieChart': function(runtime, sd) {
+            return function (sdValue) {
+                runtime.checkArity(1, arguments, "pie-chart");
+
+                var annImmutable = sd.dict["provide-plus-types"]
+                        .dict.types.StringDict;
+
+                var checkISD = function(v) {
+                    runtime._checkAnn(["string-dict"], annImmutable, v);
+                };
+
+                checkISD(sdValue);
+
+                var keys = runtime.ffi.toArray(
+                    runtime.getField(sdValue, "keys-list").app());
+                var data = keys.map(function (k) {
+                    return {
+                        'label': k,
+                        'value': runtime.getField(sdValue, "get-value").app(k)
+                    };
+                });
+
+                if (data.length === 0) {
+                    runtime.throwMessageException("There must be at least " +
+                                                  "one entry in the list.");
+                }
+
+                var radius = Math.min(WIDTH, HEIGHT) / 2;
+                var color = d3.scale.category20();
+                var arc = d3.svg.arc()
+                        .outerRadius(radius - 10)
+                        .innerRadius(0);
+
+                var pie = d3.layout.pie()
+                        .sort(null)
+                        .value(function(d) { return d.value; });
+
+                var detached = createDiv();
+                var canvas = detached.append("svg")
+                        .attr("width", WIDTH)
+                        .attr("height", HEIGHT)
+                        .append("g")
+                        .attr(
+                            "transform",
+                            "translate(" + WIDTH / 2 + "," + HEIGHT / 2 + ")");
+
+                var g = canvas.selectAll(".arc")
+                        .data(pie(data))
+                        .enter().append("g")
+                        .attr("class", "arc");
+
+                g.append("path")
+                    .attr("d", arc)
+                    .style("fill", function(d, i) { return color(i); });
+
+                g.append("text")
+                    .attr("transform", function(d) {
+                        return "translate(" + arc.centroid(d) + ")";
+                    })
+                    .attr("dy", ".35em")
+                    .style("text-anchor", "middle")
+                    .text(function(d) { return d.data.label; });
 
                 callBigBang(runtime, detached);
             };
@@ -1085,12 +1159,19 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
         };
     }
 
+    function test(runtime, sd) {
+        return function () {
+        };
+    }
+
     return {
         'xyPlot': xyPlot.xyPlot,
         'xyPlotCont': xyPlot.xyPlotCont,
         'regressionPlot': scatterPlot.regressionPlot,
         'histogramPlot': histogramPlot.histogramPlot,
+        'pieChart': pieChart.pieChart,
         'showSVG': showSVG,
-        'getBBox': getBBox
+        'getBBox': getBBox,
+        'test': test
     };
 });
