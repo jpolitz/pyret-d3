@@ -13,12 +13,11 @@ define(["js/runtime-util", "my-project/lib", "trove/string-dict"],
            return function(runtime, namespace) {
                var sd = sdLib(runtime, runtime.namespace);
                return util.makeModuleReturn(runtime, {}, {
-                   "generic-plot": runtime.makeFunction(
-                       lib.genericPlot(runtime)),
-                   "infer-bounds": runtime.makeFunction(
-                       lib.inferBounds(runtime)),
-                   "generate-xy": runtime.makeFunction(
-                       lib.generateXY(runtime)),
+                   "xy-plot": runtime.makeFunction(lib.xyPlot(runtime)),
+                   "xy-plot-cont": runtime.makeFunction(
+                       lib.xyPlotCont(runtime)),
+                   "regression-plot": runtime.makeFunction(
+                       lib.regressionPlot(runtime)),
                    "histogram-plot": runtime.makeFunction(
                        lib.histogramPlot(runtime)),
                    "pie-chart": runtime.makeFunction(

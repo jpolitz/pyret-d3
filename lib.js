@@ -5,6 +5,7 @@
 
 var WIDTH = 401;
 var HEIGHT = 401;
+var MARGIN = {'top': 30, 'left': 100, 'bottom': 45, 'right': 100};
 
 function lastElement(arr) {
     /*
@@ -16,11 +17,30 @@ function lastElement(arr) {
     return arr[arr.length - 1];
 }
 
+function flatten(lst) {
+    return lst.reduce(
+        function(outter, inner) {
+            inner.forEach(function (e) {
+                outter.push(e);
+            });
+            return outter;
+        }, []);
+}
+
+function fill(n, v) {
+    var ret = [];
+    for (var i = 0; i < n; ++i) {
+        ret.push(v);
+    }
+    return ret;
+}
+
 function assert(val, msg) {
     if (!val) {
         throw new Error("Assertion failed: " + (msg || ""));
     }
 }
+
 
 function FenwickTree(n) {
     /*
@@ -29,10 +49,7 @@ function FenwickTree(n) {
      * @param {fixnum} n: number of elements
      * @return {Object}
      */
-    this.arr = []; // use index 1 to n
-    for (var i = 0; i < n + 1; ++i) {
-        this.arr.push(0);
-    }
+    this.arr = fill(n + 1, 0); // use index 1 to n
 
     this.add = function (ind, val) {
         /*
@@ -137,6 +154,12 @@ function LogTable(n) {
     };
 };
 
+
+var CError = {
+    "RANGE": "x-min and y-min must be strictly less than " +
+        "x-max and y-max respectively."
+};
+
 define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
     var numLib = {
         /*
@@ -220,11 +243,38 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
         }
     };
 
+    function getBoundingClientRect(elem) {
+        /*
+         * Find the bounding box of elem
+         *
+         * @param {element} elem
+         * @return {object}
+         */
+        var div = d3.select('body').append('div');
+        div.node().appendChild(elem.cloneNode(true));
+        var bbox = div.node().firstChild.getBoundingClientRect();
+        div.remove();
+        return bbox;
+    }
+
+    function getBBox(svg) {
+        /*
+         * Find the bounding box of svg elem
+         *
+         * @param {element} svg
+         * @return {object}
+         */
+        var div = d3.select('body').append('div');
+        div.node().appendChild(svg.cloneNode(true));
+        var bbox = div.node().firstChild.getBBox();
+        div.remove();
+        return bbox;
+    }
+
     function myFormatter(num, digit) {
         if (num.toString().length > digit) {
             var fixnum = jsnums.toFixnum(num);
             if (fixnum.toString().length > digit) {
-                // digit - 2 because we might have '.' and '-'
                 var digitRounded = digit - 1;
                 if (fixnum < 0) {
                     digitRounded--;
@@ -261,7 +311,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
         return d3.select(document.createElement("div"));
     }
 
-    function createCanvas(detached, width, height) {
+    function createCanvas(width, height, detached) {
         /*
          * Creates a canvas and detached node
          *
@@ -271,23 +321,22 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
          * @return {Object} an object containing 'detached' which has
          * a detached node and 'canvas' which has a canvas
          */
-        var margin = {'top': 30, 'left': 100, 'bottom': 45, 'right': 100};
 
         return detached
             .append("svg")
-            .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom)
+            .attr("width", width + MARGIN.left + MARGIN.right)
+            .attr("height", height + MARGIN.top + MARGIN.bottom)
             .append("g")
             .attr(
                 "transform",
-                "translate(" + margin.left + "," + margin.top + ")");
+                "translate(" + MARGIN.left + "," + MARGIN.top + ")");
     }
 
     function callBigBang(runtime, detached) {
         runtime.getParam("current-animation-port")(detached.node());
     }
 
-    function appendAxis(canvas, xMin, xMax, yMin, yMax, width, height) {
+    function appendAxis(xMin, xMax, yMin, yMax, width, height, canvas) {
         /*
          * Appends axes to canvas (this mutates the canvas)
          *
@@ -384,62 +433,496 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
         });
     }
 
-    var xyPlot = {
+    function stylizeTip(detached) {
         /*
-         * Plot a function
+         * Add styles for tooltip
+         *
+         * @param {d3 selection} detached
+         */
+        detached.selectAll('.d3-tip')
+            .style({
+                'background': 'rgba(0, 0, 0, 0.8)',
+                'line-height': '1.5',
+                'font-weight': 'bold',
+                'font-size': '8pt',
+                'color': '#fff',
+                'padding': '10px',
+                'border-radius': '2px'
+            });
+    }
+
+    function plotLine(
+        dataPoints, id, xMin, xMax, yMin, yMax,
+        width, height, color, canvas) {
+        /*
+         * Graph a line
          *
          * Part of this function is adapted from
          * http://jsfiddle.net/christopheviau/Hwpe3/
          */
 
-        'constant': {
-            'rangeError': "x-min and y-min must be strictly less than " +
-                "x-max and y-max respectively."
-        },
+        var xToPixel = numLib.scaler(xMin, xMax, 0, width - 1, true),
+            yToPixel = numLib.scaler(yMin, yMax, height - 1, 0, true);
 
-        'plotLine': function(canvas, dataPoints) {
-            var line = d3.svg.line()
-                    .x(function (d) { return d.x; })
-                    .y(function (d) { return d.y; });
+        var line = d3.svg.line()
+                .x(function (d) { return xToPixel(d.x); })
+                .y(function (d) { return yToPixel(d.y); });
 
-            dataPoints.forEach(
-                function (groupedPoints) {
-                    canvas.append("path")
-                        .attr("class", "plotting")
-                        .attr("d", line(groupedPoints));
+        canvas.append("path")
+            .attr("class", "plotting" + id.toString())
+            .attr("d", line(dataPoints));
+
+        canvas.selectAll('.plotting' + id.toString()).style(
+            {'stroke': color, 'stroke-width': 1, 'fill': 'none'});
+    }
+
+    function plotPoints(
+        dataPoints, id, xMin, xMax, yMin, yMax,
+        width, height, color, canvas, detached) {
+        /*
+         * Regression plot
+         *
+         * Part of this function is adapted from
+         * http://alignedleft.com/tutorials/d3/making-a-scatterplot
+         */
+
+        var xToPixel = numLib.scaler(xMin, xMax, 0, width - 1, true),
+            yToPixel = numLib.scaler(yMin, yMax, height - 1, 0, true);
+
+        var tip = d3tip(detached)
+                .attr('class', 'd3-tip')
+                .direction('e')
+                .offset([0, 20])
+                .html(function (d) {
+                    var x = myFormatter(d.x, 6);
+                    var y = myFormatter(d.y, 6);
+                    return "x: " + x.toString() + "<br />" +
+                        "y: " + y.toString() + "<br />";
+                });
+
+        canvas.call(tip);
+
+        canvas.selectAll("circle")
+            .data(dataPoints)
+            .enter()
+            .append("circle")
+            .attr("class", "scatter-plot" + id.toString())
+            .attr("cx", function (d) { return xToPixel(d.x); })
+            .attr("cy", function (d) { return yToPixel(d.y); })
+            .attr("r", 2)
+            .on("mouseover", tip.show)
+            .on("mouseout", tip.hide);
+
+        canvas.selectAll('.scatter-plot' + id.toString()).style('fill', color);
+        stylizeTip(detached);
+    }
+
+    function plotBar(xMin, xMax, yMin, yMax,
+                     width, height, data, detached, canvas) {
+
+        /*
+         * Plot a histogram
+         *
+         * Part of this function is adapted from
+         * http://www.frankcleary.com/making-an-interactive-histogram-in-d3-js/
+         */
+
+        var x = d3.scale.linear()
+                .domain([0, 100])
+                .range([0, width]);
+
+        var y = d3.scale.linear()
+                .domain([0, d3.max(data, function(d) { return d.y; })])
+                .range([height, 0]);
+
+        var tip = d3tip(detached)
+                .attr('class', 'd3-tip')
+                .direction('e')
+                .offset([0, 20])
+                .html(function (d) {
+                    var maxVal = myFormatter(d.reduce(numLib.max), 6);
+                    var minVal = myFormatter(d.reduce(numLib.min), 6);
+                    return "min: " + minVal.toString() + "<br />" +
+                        "max: " + maxVal.toString() + "<br />" +
+                        "freq: " + d.y;
+                });
+
+        canvas.call(tip);
+
+        var bar = canvas.selectAll(".bar")
+                .data(data)
+                .enter().append("g")
+                .attr("class", "bar")
+                .on("mouseover", tip.show)
+                .on("mouseout", tip.hide);
+
+        bar.append("rect")
+            .attr("x", function(d) { return x(d.x); })
+            .attr("y", function(d) { return y(d.y); })
+            .attr("width", x(data[0].dx) - 1)
+            .attr("height", function(d) { return height - y(d.y); });
+
+        canvas.selectAll('.bar rect')
+            .style({
+                'fill': 'steelblue',
+                'fill-opacity': '0.8',
+                'shape-rendering': 'crispEdges'
+            })
+            .on('mouseover', function(d) {
+                d3.select(this).style('fill', "black");
+            })
+            .on('mouseout', function(d) {
+                d3.select(this).style('fill', "steelblue");
+            });
+
+        stylizeTip(detached);
+    }
+
+    function putLabel(label, width, height, detached) {
+        var legend = detached.append("div")
+                .attr('class', 'legend')
+                .html(label);
+
+        legend.style({
+            'position': 'absolute',
+            'top': (height + 70) + 'px',
+            'font-size': '8pt',
+            'text-anchor': 'middle'
+        });
+
+        legend.selectAll('sup').style({
+            'top': '-0.5em',
+            'position': 'relative',
+            'font-size': '75%',
+            'line-height': '0',
+            'vertical-align': 'baseline'
+        });
+
+        var leftCoord = (MARGIN.left + (width / 2) -
+                         getBoundingClientRect(legend.node()).width / 2);
+
+        legend.style('left', leftCoord + 'px');
+    }
+
+    function parsePoints(points, runtime) {
+        return runtime.ffi.toArray(points).map(
+            function (e) {
+                return {
+                    'x': runtime.getField(e, "x"),
+                    'y': runtime.getField(e, "y")
+                };
+            }
+        );
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
+
+    function showSVG(runtime) {
+        return function (xml) {
+            /*
+             * Produces a rendered SVG image in Big Bang box
+             *
+             * @param (string) xml
+             * @return (nothing)
+             */
+            runtime.checkString(xml);
+            runtime.getParam("current-animation-port")(xml);
+        };
+    }
+
+    function getBBoxXML(runtime) {
+        return function (xml) {
+            var parser = new DOMParser();
+            var svg = parser.parseFromString(
+                xml, "image/svg+xml").documentElement;
+            var bbox = getBBox(svg);
+            return runtime.makeObject({
+                'height': bbox.height,
+                'width': bbox.width,
+                'x': bbox.x,
+                'y': bbox.y
+            });
+        };
+    }
+
+    function histogramPlot(runtime) {
+        return function (lst, n) {
+            runtime.checkArity(2, arguments, "histogram-plot");
+            runtime.checkList(lst);
+            runtime.checkNumber(n);
+
+            if ((!jsnums.isInteger(n)) ||
+                (n < 1) ||
+                (n > 100)) {
+                runtime.throwMessageException("n must be an interger " +
+                                              "between 1 and 100");
+            }
+
+            var data = runtime.ffi.toArray(lst);
+
+            if (data.length === 0) {
+                runtime.throwMessageException("There must be at least " +
+                                              "one Number in the list.");
+            }
+
+            var xMin = data.reduce(numLib.min);
+            var xMax = data.reduce(numLib.max);
+            var dataScaler = numLib.scaler(
+                xMin, xMax, 0, 100, false);
+
+            var histogramData = d3.layout.histogram()
+                    .bins(n).value(function (val) {
+                        return jsnums.toFixnum(dataScaler(val));
+                    })(data);
+
+            var yMax = d3.max(histogramData, function(d) { return d.y; });
+
+            var detached = createDiv();
+            var canvas = createCanvas(WIDTH, HEIGHT, detached);
+
+            appendAxis(xMin, xMax, 0, yMax, WIDTH, HEIGHT, canvas);
+
+            plotBar(xMin, xMax, 0, yMax, WIDTH, HEIGHT,
+                    histogramData, detached, canvas);
+
+            callBigBang(runtime, detached);
+        };
+    }
+
+    function pieChart(runtime, sd) {
+        /*
+         * Part of this function is adapted from:
+         * http://bl.ocks.org/mbostock/3887235
+         */
+        return function (sdValue) {
+            runtime.checkArity(1, arguments, "pie-chart");
+
+            var annImmutable = sd.dict["provide-plus-types"]
+                    .dict.types.StringDict;
+
+            var checkISD = function(v) {
+                runtime._checkAnn(["string-dict"], annImmutable, v);
+            };
+
+            checkISD(sdValue);
+
+            var keys = runtime.ffi.toArray(
+                runtime.getField(sdValue, "keys-list").app());
+
+            if (keys.length === 0) {
+                runtime.throwMessageException("There must be at least " +
+                                              "one entry in the list.");
+            }
+
+            var height = HEIGHT + 75;
+            var width = WIDTH + 200;
+
+            var data = keys.map(function (k) {
+                return {
+                    'label': k,
+                    'value': runtime.getField(sdValue, "get-value").app(k)
+                };
+            });
+
+            var sum = data.map(function (e) { return e.value; })
+                    .reduce(jsnums.add);
+
+            var scaler = numLib.scaler(0, sum, 0, 100);
+
+            var radius = Math.min(width, height) / 2;
+            var color = d3.scale.category20();
+            var arc = d3.svg.arc()
+                    .outerRadius(radius - 20)
+                    .innerRadius(0);
+
+            var pie = d3.layout.pie()
+                    .sort(null)
+                    .value(function(d) { return d.value; });
+
+            var detached = createDiv();
+
+            var tip = d3tip(detached)
+                    .attr('class', 'd3-tip')
+                    .direction('e')
+                    .offset([0, 20])
+                    .html(function (d) {
+                        return "value: <br />" +
+                            myFormatter(d.data.value, 10) + "<br />" +
+                            "percent: <br />" +
+                            myFormatter(
+                                jsnums.toFixnum(
+                                    scaler(d.data.value)), 7) + "%";
+                    });
+
+            var canvas = detached.append("svg")
+                    .attr("width", width)
+                    .attr("height", height)
+                    .append("g")
+                    .attr(
+                        "transform",
+                        "translate(" + width / 2 + "," + height / 2 + ")");
+
+            canvas.call(tip);
+
+            var g = canvas.selectAll(".arc")
+                    .data(pie(data))
+                    .enter().append("g")
+                    .attr("class", "arc");
+
+            g.append("path").attr("class", "path").attr("d", arc);
+
+            g.append("text")
+                .attr("transform", function(d) {
+                    return "translate(" + arc.centroid(d) + ")";
+                })
+                .attr("dy", ".35em")
+                .style({
+                    "text-anchor": "middle"
+                })
+                .text(function(d) { return d.data.label; });
+
+            g.append("path").attr("class", "transparent").attr("d", arc);
+
+            stylizeTip(detached);
+
+            canvas.selectAll(".arc path")
+                .style({
+                    "fill": function(d, i) { return color(i); }
+                })
+                .on("mouseover", function (e) {
+                    d3.select(this.parentNode)
+                        .selectAll(".path")
+                        .style('opacity', '0.4');
+                    tip.show(e);
+                })
+                .on("mouseout", function (e) {
+                    d3.select(this.parentNode)
+                        .selectAll(".path")
+                        .style('opacity', '0.9');
+                    tip.hide(e);
+                });
+
+            canvas.selectAll(".transparent").style('visibility', 'hidden');
+
+            callBigBang(runtime, detached);
+        };
+    }
+
+    function genericPlot(runtime) {
+        return function (lst, xMin, xMax, yMin, yMax, label) {
+            runtime.checkArity(6, arguments, "generic-plot");
+            runtime.checkList(lst);
+            runtime.checkNumber(xMin);
+            runtime.checkNumber(xMax);
+            runtime.checkNumber(yMin);
+            runtime.checkNumber(yMax);
+            runtime.checkString(label);
+            if (jsnums.greaterThanOrEqual(xMin, xMax) ||
+                jsnums.greaterThanOrEqual(yMin, yMax)) {
+                runtime.throwMessageException(CError.RANGE);
+            }
+
+            var detached = createDiv();
+            var canvas = createCanvas(WIDTH, HEIGHT, detached);
+            appendAxis(xMin, xMax, yMin, yMax, WIDTH, HEIGHT, canvas);
+
+            var plots = runtime.ffi.toArray(lst).map(
+                function (e) {
+                    return {
+                        'points': parsePoints(runtime.getField(e, "points"), runtime),
+                        'color': runtime.getField(runtime.getField(e, "color"), "js-value").app(),
+                        'type': e["$name"]
+                    };
                 }
             );
 
-            canvas.selectAll('.plotting').style(
-                {'stroke': 'blue', 'stroke-width': 1, 'fill': 'none'});
-        },
+            plots.forEach(function(e, id) {
+                if (e.type === "line-plot") {
+                    plotLine(e.points, id, xMin, xMax, yMin, yMax,
+                             WIDTH, HEIGHT, e.color, canvas);
+                } else if (e.type == "scatter-plot") {
+                    plotPoints(e.points, id, xMin, xMax, yMin, yMax,
+                               WIDTH, HEIGHT, e.color, canvas, detached);
+                }
+            });
+            putLabel(label, WIDTH, HEIGHT, detached);
+            callBigBang(runtime, detached);
+        };
+    }
 
-        'findMidPoint': function (left, right, xToPixel, yToPixel,
-                                  f, yMin, yMax) {
-            var midRealX = jsnums.divide(
-                jsnums.add(left.realx, right.realx), 2);
-            var midX = xToPixel(midRealX);
-            var midRealY, midY;
-            try {
-                midRealY = f.app(midRealX);
-                jsnums.toFixnum(midRealY); // to test complex number
-                midRealY = numLib.adjustInRange(midRealY, yMin, yMax);
-                midY = yToPixel(midRealY);
-            } catch(e) {
-                midRealY = NaN;
-                midY = NaN;
+    function inferBounds(runtime) {
+        return function (lst) {
+            runtime.checkArity(1, arguments, "infer-bounds");
+            runtime.checkList(lst);
+            var dataPoints = flatten(runtime.ffi.toArray(lst).map(
+                function (p) {
+                    if (runtime.hasField(p, "points")) {
+                        return parsePoints(runtime.getField(p, "points"), runtime);
+                    } else {
+                        return [];
+                    }
+                }));
+
+            var xMin, xMax, yMin, yMax;
+
+            if (dataPoints.length === 0) {
+                xMin = -10;
+                xMax = 10;
+                yMin = -10;
+                yMax = 10;
+            } else {
+                xMin = dataPoints
+                    .map( function (d) { return d.x; } )
+                    .reduce(numLib.min);
+                xMax = dataPoints
+                    .map( function (d) { return d.x; } )
+                    .reduce(numLib.max);
+                yMin = dataPoints
+                    .map( function (d) { return d.y; } )
+                    .reduce(numLib.min);
+                yMax = dataPoints
+                    .map( function (d) { return d.y; } )
+                    .reduce(numLib.max);
+
+                var blockPortion = 10;
+                var xOneBlock = jsnums.divide(jsnums.subtract(xMax, xMin),
+                                              blockPortion);
+                var yOneBlock = jsnums.divide(jsnums.subtract(yMax, yMin),
+                                              blockPortion);
+
+                xMin = jsnums.subtract(xMin, xOneBlock);
+                xMax = jsnums.add(xMax, xOneBlock);
+                yMin = jsnums.subtract(yMin, yOneBlock);
+                yMax = jsnums.add(yMax, yOneBlock);
+
+                // Plotting 1 point should be possible
+                // but we need a wider range
+                if (jsnums.equals(xMin, xMax)) {
+                    xMin = jsnums.subtract(xMin, 1);
+                    xMax = jsnums.add(xMax, 1);
+                }
+                if (jsnums.equals(yMin, yMax)) {
+                    yMin = jsnums.subtract(yMin, 1);
+                    yMax = jsnums.add(yMax, 1);
+                }
             }
-            return {
-                'realx': midRealX,
-                'x': midX,
-                'realy': midRealY,
-                'y': midY
-            };
-        },
+            return runtime.makeObject({
+                'x-min': xMin,
+                'x-max': xMax,
+                'y-min': yMin,
+                'y-max': yMax
+            });
+        };
+    }
 
-        getDataRough: function(f, xMin, xMax, yMin, yMax, width, height) {
+    function generateXY(runtime) {
+        return function(f, xMin, xMax, yMin, yMax) {
             // Produces "rough" data points to be used for plotting
             // It is rough because it assumes that f is continuous
+            var width = WIDTH,
+                height = HEIGHT;
 
             var inputScaler = numLib.scaler(0, width - 1, xMin, xMax, false),
                 outputScaler = numLib.scaler(yMin, yMax, height - 1, 0, false);
@@ -517,645 +1000,40 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                 };
             }
 
-            if (interval.length > 0) {
-                var firstValue = interval.shift();
-                return interval.reduce(
-                    function (dataPoints, val) {
-                        var prevValue = dataPoints.pop();
-                        if (isIntersectInterval(prevValue, val)) {
-                            dataPoints.push(mergeInterval(prevValue, val));
-                        } else {
-                            dataPoints.push(prevValue);
-                            dataPoints.push(val);
-                        }
-                        return dataPoints;
-                    }, [firstValue])
-                    .map(function (d) {
-                        d.arr.sort(function (a, b) {
-                            return a.x - b.x;
+            function answer() {
+                if (interval.length > 0) {
+                    var firstValue = interval.shift();
+                    return interval.reduce(
+                        function (dataPoints, val) {
+                            var prevValue = dataPoints.pop();
+                            if (isIntersectInterval(prevValue, val)) {
+                                dataPoints.push(mergeInterval(prevValue, val));
+                            } else {
+                                dataPoints.push(prevValue);
+                                dataPoints.push(val);
+                            }
+                            return dataPoints;
+                        }, [firstValue])
+                        .map(function (d) {
+                            d.arr.sort(function (a, b) {
+                                return a.x - b.x;
+                            });
+                            return d.arr;
                         });
-                        return d.arr;
-                    });
-            } else {
-                return [];
-            }
-        },
-
-        getDataBisect: function(f, xMin, xMax, yMin, yMax, width, height) {
-            var xToPixel = numLib.scaler(xMin, xMax, 0, width - 1, true),
-                yToPixel = numLib.scaler(yMin, yMax, height - 1, 0, true),
-                delta = jsnums.divide(
-                    jsnums.subtract(xMax, xMin),
-                    jsnums.multiply(width, 1000));
-
-            var MAXDEPTH = 15, INSERTLEFT = 0, INSERTRIGHT = 1,
-                dyTolerate = 1,
-                data = [];
-
-            var roughData = xyPlot.getDataRough(
-                f, xMin, xMax, yMin, yMax, width, height);
-
-            var stackInit = roughData.map(function (d) {
-                return {
-                    'left': d[0],
-                    'right': lastElement(d),
-                    'stage': INSERTLEFT
-                };
-            }).reverse();
-
-            /*
-             stackInit = [{
-             'left': lastElement(stackInit).left,
-             'right': stackInit[0].right, 'stage': INSERTLEFT
-             }];
-             */
-
-            function fillVertical(left, right, logTable, depth) {
-                if (depth === 0) {
-                    return {
-                        'logTable': logTable,
-                        'dataPoints': []
-                    };
-                }
-                logTable = logTable.occupy(left.y).occupy(right.y);
-
-                if (logTable.isRangedOccupied(left.y, right.y)) {
-                    return {
-                        'logTable': logTable,
-                        'dataPoints': [
-                            {'x': left.x, 'y': left.y, 'cont': false},
-                            {'x': right.x, 'y': right.y, 'cont': true}
-                        ] // really? why the left point should have cont=true?
-                    };
-                }
-                var mid = xyPlot.findMidPoint(
-                    left, right, xToPixel, yToPixel, f, yMin, yMax);
-                var resultLeft = fillVertical(
-                    left, mid, logTable, depth - 1);
-                logTable = resultLeft.logTable;
-                var resultRight = fillVertical(
-                    mid, right, logTable, depth - 1);
-                logTable = resultRight.logTable;
-                return {
-                    'logTable': logTable,
-                    'dataPoints': resultLeft.dataPoints.concat(
-                        resultRight.dataPoints)
-                };
-            }
-
-            // use stack instead of recursion
-            var stack = stackInit, current, left, right, stage, ok,
-                dPixX, dPixY;
-
-            while (stack.length > 0) {
-                current = stack.pop();
-                left = current.left;
-                right = current.right;
-                stage = current.stage;
-
-
-                if (stage === INSERTLEFT) {
-                    // we use ok as a flag instead of using results from pix
-                    // which are unreliable
-                    ok = true;
-
-                    if (!Number.isNaN(left.realy)) {
-                        data.push({'x': left.x, 'y': left.y, 'cont': false});
-                    } else {
-                        ok = false;
-                    }
-                    if (!Number.isNaN(right.realy)) {
-                        current.stage = INSERTRIGHT;
-                        stack.push(current);
-                    } else {
-                        ok = false;
-                    }
-                    if (jsnums.approxEquals(left.realx, right.realx, delta)) {
-                        // this is the case where it's discontinuous
-                        // we have no need to continue searching
-                        continue;
-                    } else if (ok) {
-                        dPixX = right.x - left.x;
-                        dPixY = Math.abs(right.y - left.y);
-                        if (dPixX <= 1 && dPixY <= dyTolerate) {
-                            // this is the case where the graph is connected
-                            // enough to be considered continuous
-                            continue;
-                        } else if (dPixX === 0) {
-                            var logTable = new LogTable(height);
-                            var result = fillVertical(left, right, logTable,
-                                                      MAXDEPTH);
-                            data.push.apply(data, result.dataPoints);
-                            continue;
-                        }
-                    }
-                    var mid = xyPlot.findMidPoint(
-                        left, right, xToPixel, yToPixel, f, yMin, yMax);
-                    stack.push({
-                        'left': mid,
-                        'right': right,
-                        'stage': INSERTLEFT
-                    });
-                    stack.push({
-                        'left': left,
-                        'right': mid,
-                        'stage': INSERTLEFT
-                    });
-                } else if (stage === INSERTRIGHT) {
-                    data.push({'x': right.x, 'y': right.y, 'cont': false});
-                }
-            }
-
-
-            // TODO: Below is absolutely wrong; why does it work?
-            var newData = data.filter(function(item, pos) {
-                return (item.y >= 0 && item.y < HEIGHT) &&
-                    ((pos === 0) ||
-                     (item.x !== data[pos - 1].x) ||
-                     (item.y !== data[pos - 1].y));
-            }).reduce(function(dataPoints, d) {
-                var groupedPoints = lastElement(dataPoints);
-                if (groupedPoints.length > 0) {
-                    var prev = lastElement(groupedPoints);
-                    if ((!d.cont) && ((Math.abs(d.y - prev.y) > dyTolerate) ||
-                                      ((d.x - prev.x) > 1))) {
-                        dataPoints.push([d]);
-                    } else {
-                        groupedPoints.push(d);
-                    }
                 } else {
-                    groupedPoints.push(d);
+                    return [];
                 }
-                return dataPoints;
-            }, [[]]).filter(function (d) { return d.length > 1; });
-
-            // newData could be used to plot, but it's not smooth
-            return newData;
-
-            var intervals = newData.map(
-                function (interval) {
-                    return {
-                        left: interval[0].x,
-                        right: lastElement(interval).x
-                    };
-                }).reverse();
-            // we are going to perform stack operations
-            // so we reverse the order
-
-            // flatten the rough data to be regrouped again
-            var flattened = roughData.reduce(
-                function(lstOfPoints, groupedPoints) {
-                    groupedPoints.forEach(function (d) {
-                        lstOfPoints.push(d);
-                    });
-                    return lstOfPoints;
-                }, []);
-
-            return flattened.reduce(
-                function (dataPoints, item) {
-                    while ((intervals.length > 0) &&
-                           (lastElement(intervals).right < item.x)) {
-                        intervals.pop();
-                        dataPoints.push([]);
-                    }
-                    if (intervals.length > 0) {
-                        if ((lastElement(intervals).left <= item.x) &&
-                            (item.x <= lastElement(intervals).right)) {
-                            lastElement(dataPoints).push(item);
-                        }
-                    }
-                    return dataPoints;
-                }, [[]]).filter(function (d) { return d.length > 1; });
-        },
-
-        xyPlot: function(runtime) {
-            return function (f, xMin, xMax, yMin, yMax) {
-                runtime.checkArity(5, arguments, "xy-plot");
-                runtime.checkFunction(f);
-                runtime.checkNumber(xMin);
-                runtime.checkNumber(xMax);
-                runtime.checkNumber(yMin);
-                runtime.checkNumber(yMax);
-
-                // TODO: check that f produces Number?
-
-                if (jsnums.greaterThanOrEqual(xMin, xMax) ||
-                    jsnums.greaterThanOrEqual(yMin, yMax)) {
-                    runtime.throwMessageException(xyPlot.constants.rangeError);
-                }
-
-                var detached = createDiv();
-                var canvas = createCanvas(detached, WIDTH, HEIGHT);
-                appendAxis(canvas, xMin, xMax, yMin, yMax, WIDTH, HEIGHT);
-
-                xyPlot.plotLine(canvas, xyPlot.getDataBisect(f, xMin, xMax,
-                                                             yMin, yMax,
-                                                             WIDTH, HEIGHT));
-
-                callBigBang(runtime, detached);
-            };
-        },
-
-        xyPlotCont: function(runtime) {
-            return function (f, xMin, xMax, yMin, yMax) {
-                runtime.checkArity(5, arguments, "xy-plot-cont");
-                runtime.checkFunction(f);
-                runtime.checkNumber(xMin);
-                runtime.checkNumber(xMax);
-                runtime.checkNumber(yMin);
-                runtime.checkNumber(yMax);
-
-                // TODO: check that f produces Number?
-
-                if (jsnums.greaterThanOrEqual(xMin, xMax) ||
-                    jsnums.greaterThanOrEqual(yMin, yMax)) {
-                    runtime.throwMessageException(xyPlot.constants.rangeError);
-                }
-
-                var detached = createDiv();
-                var canvas = createCanvas(detached, WIDTH, HEIGHT);
-                appendAxis(canvas, xMin, xMax, yMin, yMax, WIDTH, HEIGHT);
-
-                xyPlot.plotLine(canvas, xyPlot.getDataRough(f, xMin, xMax,
-                                                            yMin, yMax,
-                                                            WIDTH, HEIGHT));
-
-                callBigBang(runtime, detached);
-            };
-        }
-    };
-
-    var scatterPlot = {
-        /*
-         * Scatter plot
-         *
-         * Part of this function is adapted from
-         * http://alignedleft.com/tutorials/d3/making-a-scatterplot
-         */
-        plotPoints: function(
-            xMin, xMax, yMin, yMax, width, height,
-            dataPoints, detached, canvas) {
-
-            var xToPixel = numLib.scaler(xMin, xMax, 0, width - 1, true),
-                yToPixel = numLib.scaler(yMin, yMax, height - 1, 0, true);
-
-            var tip = d3tip(detached)
-                    .attr('class', 'd3-tip')
-                    .direction('e')
-                    .offset([0, 20])
-                    .html(function (d) {
-                        var x = myFormatter(d.x, 6);
-                        var y = myFormatter(d.y, 6);
-                        return "x: " + x.toString() + "<br />" +
-                            "y: " + y.toString() + "<br />";
-                    });
-
-            canvas.call(tip);
-
-            canvas.selectAll("circle")
-                .data(dataPoints)
-                .enter()
-                .append("circle")
-                .attr("class", "plotting")
-                .attr("cx", function (d) { return xToPixel(d.x); })
-                .attr("cy", function (d) { return yToPixel(d.y); })
-                .attr("r", 2)
-                .on("mouseover", tip.show)
-                .on("mouseout", tip.hide);
-
-            canvas.selectAll('.plotting').style('stroke', 'blue');
-
-            detached.selectAll('.d3-tip')
-                .style({
-                    'background': 'rgba(0, 0, 0, 0.8)',
-                    'line-height': '1.5',
-                    'font-weight': 'bold',
-                    'font-size': '8pt',
-                    'color': '#fff',
-                    'padding': '10px',
-                    'border-radius': '2px'
-                });
-        },
-
-        'showEquation': function(detached, label) {
-            detached.append('div')
-                    .attr('class', 'equation')
-                    .html(label);
-
-            detached.selectAll('.equation sup').style({
-                'top': '-0.5em',
-                'position': 'relative',
-                'font-size': '75%',
-                'line-height': '0',
-                'vertical-align': 'baseline'
-            });
-        },
-
-        regressionPlot: function(runtime, ffi) {
-            return function (lst, f, label) {
-                runtime.checkArity(3, arguments, "regression-plot");
-                runtime.checkList(lst);
-                runtime.checkFunction(f);
-                runtime.checkString(label);
-
-                var dataPoints = ffi.toArray(lst).map(
-                    function (e) {
-                        // TODO: check that e is a posn?
-                        return {
-                            'x': runtime.getField(e, "x"),
-                            'y': runtime.getField(e, "y")
-                        };
-                    }
-                );
-
-                if (dataPoints.length === 0) {
-                    runtime.throwMessageException("There must be at least " +
-                                                  "one point in the list.");
-                }
-
-                var xMin = dataPoints
-                        .map( function (d) { return d.x; } )
-                        .reduce(numLib.min);
-                var xMax = dataPoints
-                        .map( function (d) { return d.x; } )
-                        .reduce(numLib.max);
-                var yMin = dataPoints
-                        .map( function (d) { return d.y; } )
-                        .reduce(numLib.min);
-                var yMax = dataPoints
-                        .map( function (d) { return d.y; } )
-                        .reduce(numLib.max);
-
-                var blockPortion = 10;
-                var xOneBlock = jsnums.divide(jsnums.subtract(xMax, xMin),
-                                              blockPortion);
-                var yOneBlock = jsnums.divide(jsnums.subtract(yMax, yMin),
-                                              blockPortion);
-
-                xMin = jsnums.subtract(xMin, xOneBlock);
-                xMax = jsnums.add(xMax, xOneBlock);
-                yMin = jsnums.subtract(yMin, yOneBlock);
-                yMax = jsnums.add(yMax, yOneBlock);
-
-                // Plotting 1 point should be possible
-                // but we need a wider range
-                if (jsnums.equals(xMin, xMax)) {
-                    xMin = jsnums.subtract(xMin, 1);
-                    xMax = jsnums.add(xMax, 1);
-                }
-                if (jsnums.equals(yMin, yMax)) {
-                    yMin = jsnums.subtract(yMin, 1);
-                    yMax = jsnums.add(yMax, 1);
-                }
-
-                var detached = createDiv();
-                var canvas = createCanvas(detached, WIDTH, HEIGHT);
-                appendAxis(canvas, xMin, xMax, yMin, yMax, WIDTH, HEIGHT);
-
-                scatterPlot.plotPoints(xMin, xMax, yMin, yMax, WIDTH, HEIGHT,
-                                       dataPoints, detached, canvas);
-
-                xyPlot.plotLine(canvas, xyPlot.getDataRough(f, xMin, xMax,
-                                                            yMin, yMax,
-                                                            WIDTH, HEIGHT));
-                scatterPlot.showEquation(detached, label);
-
-                callBigBang(runtime, detached);
-            };
-        }
-    };
-
-    var histogramPlot = {
-        /*
-         * Plot a histogram
-         *
-         * Part of this function is adapted from
-         * http://www.frankcleary.com/making-an-interactive-histogram-in-d3-js/
-         */
-
-        'constant': {
-            'MAXN': 100
-        },
-
-        'plotBar': function(
-            xMin, xMax, yMin, yMax, width, height, data, detached, canvas) {
-
-            var x = d3.scale.linear()
-                    .domain([0, histogramPlot.constant.MAXN])
-                    .range([0, width]);
-
-            var y = d3.scale.linear()
-                    .domain([0, d3.max(data, function(d) { return d.y; })])
-                    .range([height, 0]);
-
-            var tip = d3tip(detached)
-                    .attr('class', 'd3-tip')
-                    .direction('e')
-                    .offset([0, 20])
-                    .html(function (d) {
-                        var maxVal = myFormatter(d.reduce(numLib.max), 6);
-                        var minVal = myFormatter(d.reduce(numLib.min), 6);
-                        return "min: " + minVal.toString() + "<br />" +
-                            "max: " + maxVal.toString() + "<br />" +
-                            "freq: " + d.y;
-                    });
-
-            canvas.call(tip);
-
-            var bar = canvas.selectAll(".bar")
-                    .data(data)
-                    .enter().append("g")
-                    .attr("class", "bar")
-                    .on("mouseover", tip.show)
-                    .on("mouseout", tip.hide);
-
-            bar.append("rect")
-                .attr("x", function(d) { return x(d.x); })
-                .attr("y", function(d) { return y(d.y); })
-                .attr("width", x(data[0].dx) - 1)
-                .attr("height", function(d) { return height - y(d.y); });
-
-            canvas.selectAll('.bar rect')
-                .style({
-                    'fill': 'steelblue',
-                    'fill-opacity': '0.8',
-                    'shape-rendering': 'crispEdges'
-                })
-                .on('mouseover', function(d) {
-                    d3.select(this).style('fill', "black");
-                })
-                .on('mouseout', function(d) {
-                    d3.select(this).style('fill', "steelblue");
-                });
-
-            detached.selectAll('.d3-tip')
-                .style({
-                    'background': 'rgba(0, 0, 0, 0.8)',
-                    'line-height': '1.5',
-                    'font-weight': 'bold',
-                    'font-size': '8pt',
-                    'color': '#fff',
-                    'padding': '10px',
-                    'border-radius': '2px'
-                });
-        },
-
-
-        histogramPlot: function(runtime, ffi) {
-            return function (lst, n) {
-                runtime.checkArity(2, arguments, "histogram-plot");
-                runtime.checkList(lst);
-                runtime.checkNumber(n);
-
-                if ((!jsnums.isInteger(n)) ||
-                    (n < 1) ||
-                    (n > histogramPlot.constant.MAXN)) {
-                    runtime.throwMessageException("n must be an interger " +
-                                                  "between 1 and " +
-                                                  histogramPlot.constant.MAXN);
-                }
-
-                var data = ffi.toArray(lst);
-
-                if (data.length === 0) {
-                    runtime.throwMessageException("There must be at least " +
-                                                  "one Number in the list.");
-                }
-
-                var xMin = data.reduce(numLib.min);
-                var xMax = data.reduce(numLib.max);
-                var dataScaler = numLib.scaler(
-                    xMin, xMax, 0, histogramPlot.constant.MAXN, false);
-
-                var histogramData = d3.layout.histogram()
-                        .bins(n).value(function (val) {
-                            return jsnums.toFixnum(dataScaler(val));
-                        })(data);
-
-                var yMax = d3.max(histogramData, function(d) { return d.y; });
-
-                var detached = createDiv();
-                var canvas = createCanvas(detached, WIDTH, HEIGHT);
-
-                appendAxis(canvas, xMin, xMax, 0, yMax, WIDTH, HEIGHT);
-
-                histogramPlot.plotBar(xMin, xMax, 0, yMax, WIDTH, HEIGHT,
-                                      histogramData, detached, canvas);
-
-                callBigBang(runtime, detached);
-            };
-        }
-    };
-
-    var pieChart = {
-        /*
-         * Part of this function is adapted from:
-         * http://bl.ocks.org/mbostock/3887235
-         */
-        'pieChart': function(runtime, sd) {
-            return function (sdValue) {
-                runtime.checkArity(1, arguments, "pie-chart");
-
-                var annImmutable = sd.dict["provide-plus-types"]
-                        .dict.types.StringDict;
-
-                var checkISD = function(v) {
-                    runtime._checkAnn(["string-dict"], annImmutable, v);
-                };
-
-                checkISD(sdValue);
-
-                var keys = runtime.ffi.toArray(
-                    runtime.getField(sdValue, "keys-list").app());
-                var data = keys.map(function (k) {
-                    return {
-                        'label': k,
-                        'value': runtime.getField(sdValue, "get-value").app(k)
-                    };
-                });
-
-                if (data.length === 0) {
-                    runtime.throwMessageException("There must be at least " +
-                                                  "one entry in the list.");
-                }
-
-                var radius = Math.min(WIDTH, HEIGHT) / 2;
-                var color = d3.scale.category20();
-                var arc = d3.svg.arc()
-                        .outerRadius(radius - 10)
-                        .innerRadius(0);
-
-                var pie = d3.layout.pie()
-                        .sort(null)
-                        .value(function(d) { return d.value; });
-
-                var detached = createDiv();
-                var canvas = detached.append("svg")
-                        .attr("width", WIDTH)
-                        .attr("height", HEIGHT)
-                        .append("g")
-                        .attr(
-                            "transform",
-                            "translate(" + WIDTH / 2 + "," + HEIGHT / 2 + ")");
-
-                var g = canvas.selectAll(".arc")
-                        .data(pie(data))
-                        .enter().append("g")
-                        .attr("class", "arc");
-
-                g.append("path")
-                    .attr("d", arc)
-                    .style("fill", function(d, i) { return color(i); });
-
-                g.append("text")
-                    .attr("transform", function(d) {
-                        return "translate(" + arc.centroid(d) + ")";
-                    })
-                    .attr("dy", ".35em")
-                    .style("text-anchor", "middle")
-                    .text(function(d) { return d.data.label; });
-
-                callBigBang(runtime, detached);
-            };
-        }
-    };
-
-    function showSVG(runtime) {
-        return function (xml) {
-            /*
-             * Produces a rendered SVG image in Big Bang box
-             *
-             * @param (string) xml
-             * @return (nothing)
-             */
-            runtime.checkString(xml);
-            runtime.getParam("current-animation-port")(xml);
-        };
-    }
-
-    function getBBox(runtime) {
-        return function (xml) {
-            var parser = new DOMParser();
-            var svg = parser.parseFromString(
-                xml, "image/svg+xml").documentElement;
-            var div = d3.select('.dummydiv');
-            if (div.empty()) {
-                div = d3.select(document.createElement('div'))
-                    .attr('class', 'dummydiv');
-                document.body.appendChild(div.node());
-            } else {
-                div.selectAll('svg').remove();
             }
-            div.node().appendChild(svg);
-            var bbox = div.select('svg').node().getBBox();
-            var ret = runtime.makeObject({
-                'height': bbox.height,
-                'width': bbox.width,
-                'x': bbox.x,
-                'y': bbox.y
-            });
-            div.selectAll('svg').remove();
-            return ret;
+            var ans = answer()
+                    .map(function (lst) {
+                        return lst.map(function (dp) {
+                            return runtime.makeObject({
+                                'x': dp.realx,
+                                'y': dp.realy
+                            });
+                        });
+                    }).map(runtime.ffi.makeList);
+            return runtime.ffi.makeList(ans);
         };
     }
 
@@ -1165,13 +1043,14 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
     }
 
     return {
-        'xyPlot': xyPlot.xyPlot,
-        'xyPlotCont': xyPlot.xyPlotCont,
-        'regressionPlot': scatterPlot.regressionPlot,
-        'histogramPlot': histogramPlot.histogramPlot,
-        'pieChart': pieChart.pieChart,
+        'genericPlot': genericPlot,
+        'inferBounds': inferBounds,
+        'generateXY': generateXY,
+        'histogramPlot': histogramPlot,
+        'pieChart': pieChart,
         'showSVG': showSVG,
-        'getBBox': getBBox,
+        'getBBox': getBBoxXML,
         'test': test
     };
 });
+
