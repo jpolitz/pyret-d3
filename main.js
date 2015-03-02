@@ -8,6 +8,7 @@ requirejs.config({
 });
 requirejs.undef("@js-http/" + baseUrl + "main.js");
 requirejs.undef("my-project/lib");
+requirejs.undef("my-project/libJS");
 define(["js/runtime-util", "my-project/lib", "trove/string-dict"],
        function(util, lib, sdLib) {
            return function(runtime, namespace) {
@@ -23,6 +24,8 @@ define(["js/runtime-util", "my-project/lib", "trove/string-dict"],
                        lib.histogramPlot(runtime)),
                    "pie-chart": runtime.makeFunction(
                        lib.pieChart(runtime, sd)),
+                   "tree-diagram": runtime.makeFunction(
+                       lib.treeDiagram(runtime)),
                    "show-svg": runtime.makeFunction(lib.showSVG(runtime)),
                    "getBBox": runtime.makeFunction(lib.getBBox(runtime)),
                    "test": runtime.makeFunction(lib.test(runtime, sd))

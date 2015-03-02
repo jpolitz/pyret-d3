@@ -6,6 +6,7 @@
 var WIDTH = 401;
 var HEIGHT = 401;
 var MARGIN = {'top': 30, 'left': 100, 'bottom': 45, 'right': 100};
+var HISTOGRAMN = 100;
 
 function lastElement(arr) {
     /*
@@ -18,29 +19,30 @@ function lastElement(arr) {
 }
 
 function flatten(lst) {
+    /*
+     * Flatten the list
+     *
+     * @param {array} lst
+     * @return {array}
+     */
     return lst.reduce(
-        function(outter, inner) {
-            inner.forEach(function (e) {
-                outter.push(e);
-            });
-            return outter;
-        }, []);
+        function(outter, inner) { return outter.concat(inner); },
+        []);
 }
 
 function fill(n, v) {
     var ret = [];
-    for (var i = 0; i < n; ++i) {
-        ret.push(v);
-    }
+    for (var i = 0; i < n; ++i) ret.push(v);
     return ret;
 }
 
 function assert(val, msg) {
-    if (!val) {
-        throw new Error("Assertion failed: " + (msg || ""));
-    }
+    if (!val) throw new Error("Assertion failed: " + (msg || ""));
 }
 
+function svgTranslate(x, y) {
+    return "translate(" + x.toString() + "," + y.toString() + ")";
+}
 
 function FenwickTree(n) {
     /*
@@ -154,153 +156,13 @@ function LogTable(n) {
     };
 };
 
-
 var CError = {
     "RANGE": "x-min and y-min must be strictly less than " +
         "x-max and y-max respectively."
 };
 
-define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
-    var numLib = {
-        /*
-         * Utility for jsnums
-         */
-
-        'scaler': function(oldX, oldY, newX, newY, toInt) {
-            /*
-             * Produces a scaler function to convert a value in
-             * an interval to another value in a new interval
-             *
-             * @param {jsnums} oldX
-             * @param {jsnums} oldY
-             * @param {jsnums} newX
-             * @param {jsnums} newY
-             * @param {boolean} toInt: if true, the result is converted to
-             * integer fixnum
-             * @return {Function}
-             */
-            return function (k) {
-                var oldDiff = jsnums.subtract(k, oldX);
-                var oldRange = jsnums.subtract(oldY, oldX);
-                var portion = jsnums.divide(oldDiff, oldRange);
-                var newRange = jsnums.subtract(newY, newX);
-                var newPortion = jsnums.multiply(portion, newRange);
-                var result = jsnums.add(newPortion, newX);
-                if (toInt) {
-                    return Math.floor(jsnums.toFixnum(result));
-                } else {
-                    return result;
-                }
-            };
-        },
-
-        'adjustInRange': function(k, vmin, vmax) {
-            /*
-             * Adjust k to be between vmin and vmax if it's not in the range
-             *
-             * @param {jsnums} k
-             * @param {jsnums} vmin
-             * @param {jsnums} vmax
-             * @return {jsnums}
-             */
-            if (jsnums.lessThan(k, vmin)) {
-                return vmin;
-            } else if (jsnums.lessThan(vmax, k)) {
-                return vmax;
-            } else {
-                return k;
-            }
-        },
-
-        'max': function(a, b) {
-            /*
-             * Find the maximum value
-             *
-             * @param {jsnums} a
-             * @param {jsnums} b
-             * @return {jsnums}
-             */
-            if (jsnums.lessThan(a, b)) {
-                return b;
-            } else {
-                return a;
-            }
-        },
-
-        'min': function (a, b) {
-            /*
-             * Find the minimum value
-             *
-             * @param {jsnums} a
-             * @param {jsnums} b
-             * @return {jsnums}
-             */
-            if (jsnums.lessThan(a, b)) {
-                return a;
-            } else {
-                return b;
-            }
-        }
-    };
-
-    function getBoundingClientRect(elem) {
-        /*
-         * Find the bounding box of elem
-         *
-         * @param {element} elem
-         * @return {object}
-         */
-        var div = d3.select('body').append('div');
-        div.node().appendChild(elem.cloneNode(true));
-        var bbox = div.node().firstChild.getBoundingClientRect();
-        div.remove();
-        return bbox;
-    }
-
-    function getBBox(svg) {
-        /*
-         * Find the bounding box of svg elem
-         *
-         * @param {element} svg
-         * @return {object}
-         */
-        var div = d3.select('body').append('div');
-        div.node().appendChild(svg.cloneNode(true));
-        var bbox = div.node().firstChild.getBBox();
-        div.remove();
-        return bbox;
-    }
-
-    function myFormatter(num, digit) {
-        if (num.toString().length > digit) {
-            var fixnum = jsnums.toFixnum(num);
-            if (fixnum.toString().length > digit) {
-                var digitRounded = digit - 1;
-                if (fixnum < 0) {
-                    digitRounded--;
-                }
-                if (fixnum.toString().indexOf(".") !== -1) {
-                    digitRounded--;
-                }
-                var fixnumRounded = d3
-                        .format('.' + digitRounded + 'r')(fixnum);
-                // d3 always cast the result of format to
-                // string and .r formatter could give NaN
-                if ((fixnumRounded === "NaN") ||
-                    (fixnumRounded.length > digit)) {
-                    // use only 3 position because this notation
-                    // has xxx.xxxe+.. ~ 9 digits
-                    return d3.format('.3e')(fixnum);
-                } else {
-                    return fixnumRounded;
-                }
-            } else {
-                return fixnum;
-            }
-        } else {
-            return num;
-        }
-    }
+define(["d3", "d3tip", "js/js-numbers", "my-project/libJS", "my-project/libNum"],
+       function (d3, d3tip, jsnums, libJS, libNum) {
 
     function createDiv() {
         /*
@@ -308,10 +170,11 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
          *
          * @return {d3 selection}
          */
-        return d3.select(document.createElement("div"));
+        return d3.select(document.createElement("div"))
+            .attr('class', 'maind3');
     }
 
-    function createCanvas(width, height, detached) {
+    function createCanvas(width, height, detached, orient) {
         /*
          * Creates a canvas and detached node
          *
@@ -322,49 +185,111 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
          * a detached node and 'canvas' which has a canvas
          */
 
-        return detached
-            .append("svg")
-            .attr("width", width + MARGIN.left + MARGIN.right)
-            .attr("height", height + MARGIN.top + MARGIN.bottom)
-            .append("g")
-            .attr(
-                "transform",
-                "translate(" + MARGIN.left + "," + MARGIN.top + ")");
+        var divSvg = detached.append('div');
+        var canvas = divSvg
+                .append("svg")
+                .attr("width", width + MARGIN.left + MARGIN.right)
+                .attr("height", height + MARGIN.top + MARGIN.bottom)
+                .append("g")
+                .attr('class', 'maing')
+                .append('g');
+
+        if (orient === "top-left") {
+            canvas.attr("transform", svgTranslate(MARGIN.left, MARGIN.top));
+        } else if (orient == "center") {
+            var allwidth = width + MARGIN.left + MARGIN.right;
+            var allheight = height + MARGIN.top + MARGIN.bottom;
+            canvas.attr("transform",
+                        svgTranslate(allwidth / 2, allheight / 2));
+        }
+        return canvas;
     }
 
     function callBigBang(runtime, detached) {
         runtime.getParam("current-animation-port")(detached.node());
     }
 
+    function createSave(detached) {
+        /*
+         * A part of these are adapted from
+         * http://techslides.com/save-svg-as-an-image
+         */
+        detached.append('button')
+            .text('Save!')
+            .on('click', function() {
+
+                var svg = detached.select("svg")
+                    .attr("version", 1.1)
+                    .attr("xmlns", "http://www.w3.org/2000/svg");
+
+                detached.append('canvas')
+                    .style('display', 'none')
+                    .attr('width', svg.attr("width"))
+                    .attr('height', svg.attr("height"));
+                detached.append('div')
+                    .attr('id', 'svgdataurl')
+                    .style('display', 'none');
+                detached.append('div')
+                    .attr('id', 'pngdataurl')
+                    .style('display', 'none');
+
+                var html = detached.node().firstChild.innerHTML;
+                var imgsrc = 'data:image/svg+xml;base64,'+ btoa(html);
+                var img = '<img src="'+imgsrc+'">';
+                detached.select("#svgdataurl").html(img);
+
+
+                var image = new Image;
+                image.src = imgsrc;
+                image.onload = function() {
+
+                    var opts = {
+                        canvas: detached.select("canvas").node(),
+                        image: image
+                    };
+
+                    var canvas = libJS.drawImage(opts);
+
+                    var canvasdata = canvas.toDataURL("image/png");
+
+                    var pngimg = '<img src="'+canvasdata+'">';
+                    detached.select("#pngdataurl").html(pngimg);
+                    var a = document.createElement("a");
+                    a.download = "sample.png";
+                    a.href = canvasdata;
+                    a.click();
+                };
+            });
+    }
+
     function appendAxis(xMin, xMax, yMin, yMax, width, height, canvas) {
         /*
          * Appends axes to canvas (this mutates the canvas)
          *
-         * @param {d3 selection} canvas
          * @param {jsnums} xMin
          * @param {jsnums} xMax
          * @param {jsnums} yMin
          * @param {jsnums} yMax
          * @param {fixnum} width
          * @param {fixnum} height
+         * @param {d3 selection} canvas
          */
 
         function getAxisConf(aMin, aMax) {
-            var axisConf = {};
-            var numer = jsnums.subtract(0, aMin);
-            var denom = jsnums.subtract(aMax, aMin);
-            var pos = jsnums.toFixnum(jsnums.divide(numer, denom));
+            var conf = {};
+            var scaler = libNum.scaler(aMin, aMax, 0, 1, false);
+            var pos = jsnums.toFixnum(scaler(0));
             if (0 <= pos && pos <= 1) {
-                axisConf.bold = true;
-                axisConf.pos = pos;
+                conf.bold = true;
+                conf.pos = pos;
             } else if (pos > 1) {
-                axisConf.bold = false;
-                axisConf.pos = 1;
+                conf.bold = false;
+                conf.pos = 1;
             } else if (pos < 0) {
-                axisConf.bold = false;
-                axisConf.pos = 0;
+                conf.bold = false;
+                conf.pos = 0;
             }
-            return axisConf;
+            return conf;
         }
 
         var xAxisConf = getAxisConf(yMin, yMax),
@@ -378,33 +303,33 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                 .domain([0, tickNum]).range([height - 1, 0]);
         var allValues = d3.range(0, tickNum + 1);
 
-        var xAxisDisplayScaler = numLib.scaler(0, tickNum, xMin, xMax),
-            yAxisDisplayScaler = numLib.scaler(0, tickNum, yMin, yMax);
+        var xAxisDisplayScaler = libNum.scaler(0, tickNum, xMin, xMax),
+            yAxisDisplayScaler = libNum.scaler(0, tickNum, yMin, yMax);
 
         var xAxis = d3.svg.axis().scale(xAxisScaler)
                 .orient((xAxisConf.pos === 0) ? "top" : "bottom")
                 .tickValues(allValues).tickFormat(
                     function (d, i) {
-                        return myFormatter(xAxisDisplayScaler(i), 10);
+                        return libNum.format(xAxisDisplayScaler(i), 10);
                     });
 
         canvas.append("g")
             .attr("class", "x axis").attr(
                 "transform",
-                "translate(0," + xAxisConf.pos * (height - 1) + ")")
+                svgTranslate(0, xAxisConf.pos * (height - 1)))
             .call(xAxis);
 
         var yAxis = d3.svg.axis().scale(yAxisScaler)
                 .orient((yAxisConf.pos === 1) ? "right" : "left")
                 .tickValues(allValues).tickFormat(
                     function (d, i) {
-                        return myFormatter(yAxisDisplayScaler(i), 10);
+                        return libNum.format(yAxisDisplayScaler(i), 10);
                     });
 
         canvas.append("g")
             .attr("class", "y axis").attr(
                 "transform",
-                "translate(" + yAxisConf.pos * (width - 1) + ", 0)")
+                svgTranslate(yAxisConf.pos * (width - 1), 0))
             .call(yAxis);
 
         canvas.selectAll('.x.axis path').style({
@@ -461,8 +386,8 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
          * http://jsfiddle.net/christopheviau/Hwpe3/
          */
 
-        var xToPixel = numLib.scaler(xMin, xMax, 0, width - 1, true),
-            yToPixel = numLib.scaler(yMin, yMax, height - 1, 0, true);
+        var xToPixel = libNum.scaler(xMin, xMax, 0, width - 1, true),
+            yToPixel = libNum.scaler(yMin, yMax, height - 1, 0, true);
 
         var line = d3.svg.line()
                 .x(function (d) { return xToPixel(d.x); })
@@ -486,16 +411,16 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
          * http://alignedleft.com/tutorials/d3/making-a-scatterplot
          */
 
-        var xToPixel = numLib.scaler(xMin, xMax, 0, width - 1, true),
-            yToPixel = numLib.scaler(yMin, yMax, height - 1, 0, true);
+        var xToPixel = libNum.scaler(xMin, xMax, 0, width - 1, true),
+            yToPixel = libNum.scaler(yMin, yMax, height - 1, 0, true);
 
         var tip = d3tip(detached)
                 .attr('class', 'd3-tip')
                 .direction('e')
                 .offset([0, 20])
                 .html(function (d) {
-                    var x = myFormatter(d.x, 6);
-                    var y = myFormatter(d.y, 6);
+                    var x = libNum.format(d.x, 6);
+                    var y = libNum.format(d.y, 6);
                     return "x: " + x.toString() + "<br />" +
                         "y: " + y.toString() + "<br />";
                 });
@@ -517,8 +442,8 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
         stylizeTip(detached);
     }
 
-    function plotBar(xMin, xMax, yMin, yMax,
-                     width, height, data, detached, canvas) {
+    function plotBar(xMin, xMax, yMin, yMax, width, height,
+                     data, histogramn, detached, canvas) {
 
         /*
          * Plot a histogram
@@ -528,7 +453,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
          */
 
         var x = d3.scale.linear()
-                .domain([0, 100])
+                .domain([0, histogramn])
                 .range([0, width]);
 
         var y = d3.scale.linear()
@@ -540,8 +465,8 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                 .direction('e')
                 .offset([0, 20])
                 .html(function (d) {
-                    var maxVal = myFormatter(d.reduce(numLib.max), 6);
-                    var minVal = myFormatter(d.reduce(numLib.min), 6);
+                    var maxVal = libNum.format(d.reduce(libNum.max), 6);
+                    var minVal = libNum.format(d.reduce(libNum.min), 6);
                     return "min: " + minVal.toString() + "<br />" +
                         "max: " + maxVal.toString() + "<br />" +
                         "freq: " + d.y;
@@ -579,29 +504,21 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
     }
 
     function putLabel(label, width, height, detached) {
-        var legend = detached.append("div")
-                .attr('class', 'legend')
-                .html(label);
+        var legend = detached.select('.maing')
+                .append("text")
+                .attr("x", (MARGIN.left + width + MARGIN.right) / 2)
+                .attr("y", height + MARGIN.top + 30)
+                .html(label
+                      .replace("<sup>",
+                               "<tspan baseline-shift='super'>")
+                      .replace("</sup>",
+                               "</tspan>"));
 
         legend.style({
             'position': 'absolute',
-            'top': (height + 70) + 'px',
             'font-size': '8pt',
             'text-anchor': 'middle'
         });
-
-        legend.selectAll('sup').style({
-            'top': '-0.5em',
-            'position': 'relative',
-            'font-size': '75%',
-            'line-height': '0',
-            'vertical-align': 'baseline'
-        });
-
-        var leftCoord = (MARGIN.left + (width / 2) -
-                         getBoundingClientRect(legend.node()).width / 2);
-
-        legend.style('left', leftCoord + 'px');
     }
 
     function parsePoints(points, runtime) {
@@ -632,12 +549,12 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
         };
     }
 
-    function getBBoxXML(runtime) {
+    function getBBox(runtime) {
         return function (xml) {
             var parser = new DOMParser();
             var svg = parser.parseFromString(
                 xml, "image/svg+xml").documentElement;
-            var bbox = getBBox(svg);
+            var bbox = libJS.getBBox(svg);
             return runtime.makeObject({
                 'height': bbox.height,
                 'width': bbox.width,
@@ -655,9 +572,10 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
 
             if ((!jsnums.isInteger(n)) ||
                 (n < 1) ||
-                (n > 100)) {
-                runtime.throwMessageException("n must be an interger " +
-                                              "between 1 and 100");
+                (n > HISTOGRAMN)) {
+                runtime.throwMessageException(
+                    "n must be an interger between 1 and " +
+                        HISTOGRAMN.toString());
             }
 
             var data = runtime.ffi.toArray(lst);
@@ -667,10 +585,9 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                                               "one Number in the list.");
             }
 
-            var xMin = data.reduce(numLib.min);
-            var xMax = data.reduce(numLib.max);
-            var dataScaler = numLib.scaler(
-                xMin, xMax, 0, 100, false);
+            var xMin = data.reduce(libNum.min);
+            var xMax = data.reduce(libNum.max);
+            var dataScaler = libNum.scaler(xMin, xMax, 0, HISTOGRAMN, false);
 
             var histogramData = d3.layout.histogram()
                     .bins(n).value(function (val) {
@@ -680,12 +597,12 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
             var yMax = d3.max(histogramData, function(d) { return d.y; });
 
             var detached = createDiv();
-            var canvas = createCanvas(WIDTH, HEIGHT, detached);
+            var canvas = createCanvas(WIDTH, HEIGHT, detached, "top-left");
 
             appendAxis(xMin, xMax, 0, yMax, WIDTH, HEIGHT, canvas);
 
             plotBar(xMin, xMax, 0, yMax, WIDTH, HEIGHT,
-                    histogramData, detached, canvas);
+                    histogramData, HISTOGRAMN, detached, canvas);
 
             callBigBang(runtime, detached);
         };
@@ -716,9 +633,6 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                                               "one entry in the list.");
             }
 
-            var height = HEIGHT + 75;
-            var width = WIDTH + 200;
-
             var data = keys.map(function (k) {
                 return {
                     'label': k,
@@ -729,12 +643,12 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
             var sum = data.map(function (e) { return e.value; })
                     .reduce(jsnums.add);
 
-            var scaler = numLib.scaler(0, sum, 0, 100);
+            var scaler = libNum.scaler(0, sum, 0, 100);
 
-            var radius = Math.min(width, height) / 2;
+            var radius = Math.min(WIDTH, HEIGHT) / 2;
             var color = d3.scale.category20();
             var arc = d3.svg.arc()
-                    .outerRadius(radius - 20)
+                    .outerRadius(radius)
                     .innerRadius(0);
 
             var pie = d3.layout.pie()
@@ -749,21 +663,14 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                     .offset([0, 20])
                     .html(function (d) {
                         return "value: <br />" +
-                            myFormatter(d.data.value, 10) + "<br />" +
+                            libNum.format(d.data.value, 10) + "<br />" +
                             "percent: <br />" +
-                            myFormatter(
+                            libNum.format(
                                 jsnums.toFixnum(
                                     scaler(d.data.value)), 7) + "%";
                     });
 
-            var canvas = detached.append("svg")
-                    .attr("width", width)
-                    .attr("height", height)
-                    .append("g")
-                    .attr(
-                        "transform",
-                        "translate(" + width / 2 + "," + height / 2 + ")");
-
+            var canvas = createCanvas(WIDTH, HEIGHT, detached, "center");
             canvas.call(tip);
 
             var g = canvas.selectAll(".arc")
@@ -804,8 +711,172 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                     tip.hide(e);
                 });
 
-            canvas.selectAll(".transparent").style('visibility', 'hidden');
+            canvas.selectAll(".transparent").style('opacity', '0');
+            canvas.selectAll('text').style({'font-size': '15px'});
 
+            createSave(detached);
+
+            callBigBang(runtime, detached);
+        };
+    }
+
+    function treeDiagram(runtime) {
+        /*
+         * Part of this function is adapted from:
+         * http://www.d3noob.org/2014/01/tree-diagrams-in-d3js_11.html
+         */
+        return function (rootNode) {
+            runtime.checkArity(1, arguments, "tree-diagram");
+            runtime.checkObject(rootNode);
+
+            function parseTree(node) {
+                return {
+                    'name': runtime.getField(node, "name"),
+                    'children': runtime.ffi.toArray(
+                        runtime.getField(node, "children")).map(parseTree)
+                };
+            }
+
+            var tree = d3.layout.tree().size([HEIGHT, WIDTH]);
+            var diagonal = d3.svg.diagonal()
+                    .projection(function(d) { return [d.x, d.y]; });
+
+            var root = parseTree(rootNode);
+
+            var detached = createDiv();
+            var canvas = createCanvas(WIDTH, HEIGHT, detached, "top-left");
+
+            root.x0 = HEIGHT / 2;
+            root.y0 = 0;
+
+            var i = 0, duration = 750;
+
+            function click(d) {
+                if (d.children) {
+                    d._children = d.children;
+                    d.children = null;
+                } else {
+                    d.children = d._children;
+                    d._children = null;
+                }
+                update(d);
+            }
+
+            function update(source) {
+                // Compute the new tree layout.
+                var nodes = tree.nodes(root).reverse(),
+                    links = tree.links(nodes);
+
+                // Normalize for fixed-depth.
+                nodes.forEach(function(d) { d.y = d.depth * 40; });
+
+                // Update the
+                var node = canvas.selectAll("g.node")
+                        .data(nodes, function(d) { return d.id || (d.id = ++i); });
+
+                // Enter any new nodes at the parent's previous position.
+                var nodeEnter = node.enter().append("g")
+                        .attr("class", "node")
+                        .attr("transform", function(d) {
+                            return svgTranslate(source.x0, source.y0);
+                        })
+                        .on("click", click);
+
+                nodeEnter.append("circle")
+                    .attr("r", 1e-6)
+                    .style("fill", function(d) {
+                        return d._children ? "lightsteelblue" : "#fff";
+                    });
+
+                nodeEnter.append("text")
+                    .attr("dy", ".35em")
+                    .attr("text-anchor", "middle")
+                    .text(function(d) { return d.name; })
+                    .style("fill-opacity", 1e-6);
+
+                // Transition nodes to their new position.
+                var nodeUpdate = node.transition()
+                        .duration(duration)
+                        .attr("transform", function(d) {
+                            return svgTranslate(d.x, d.y);
+                        });
+
+                nodeUpdate.select("circle")
+                    .attr("r", 10)
+                    .style("fill", function(d) {
+                        return d._children ? "lightsteelblue" : "#fff";
+                    });
+
+                nodeUpdate.select("text")
+                    .style("fill-opacity", 1);
+
+                // Transition exiting nodes to the parent's new position.
+                var nodeExit = node.exit().transition()
+                        .duration(duration)
+                        .attr("transform", function(d) {
+                            return svgTranslate(source.y, source.x);
+                        })
+                        .remove();
+
+                nodeExit.select("circle").attr("r", 1e-6);
+
+                nodeExit.select("text")
+                    .style("fill-opacity", 1e-6);
+
+                // Update the links
+
+                var link = canvas.selectAll("path.link")
+                        .data(links, function(d) { return d.target.id; });
+
+                // Enter any new links at the parent's previous position.
+                link.enter().insert("path", "g")
+                    .attr("class", "link")
+                    .attr("d", function(d) {
+                        var o = {x: source.x0, y: source.y0};
+                        return diagonal({source: o, target: o});
+                    });
+
+                // Transition links to their new position.
+                link.transition()
+                    .duration(duration)
+                    .attr("d", diagonal);
+
+                // Transition exiting nodes to the parent's new position.
+                link.exit().transition()
+                    .duration(duration)
+                    .attr("d", function(d) {
+                        var o = {x: source.x, y: source.y};
+                        return diagonal({source: o, target: o});
+                    })
+                    .remove();
+
+                // Stash the old positions for transition.
+                nodes.forEach(function(d) {
+                    d.x0 = d.x;
+                    d.y0 = d.y;
+                });
+
+                canvas.selectAll(".node").style("cursor", "pointer");
+
+                canvas.selectAll(".node circle").style({
+                    'fill': '#fff',
+                    'opacity': 0.5,
+                    'stroke': 'blue',
+                    'stroke-width': "1.5px"
+                });
+
+                canvas.selectAll(".node text").style({
+                    'font-size': '13px'
+                });
+
+                canvas.selectAll(".link").style({
+                    'fill': 'none',
+                    'stroke': '#ccc',
+                    'stroke-width': '2px'
+                });
+            }
+
+            update(root);
             callBigBang(runtime, detached);
         };
     }
@@ -825,14 +896,16 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
             }
 
             var detached = createDiv();
-            var canvas = createCanvas(WIDTH, HEIGHT, detached);
+            var canvas = createCanvas(WIDTH, HEIGHT, detached, "top-left");
             appendAxis(xMin, xMax, yMin, yMax, WIDTH, HEIGHT, canvas);
 
             var plots = runtime.ffi.toArray(lst).map(
                 function (e) {
                     return {
-                        'points': parsePoints(runtime.getField(e, "points"), runtime),
-                        'color': runtime.getField(runtime.getField(e, "color"), "js-value").app(),
+                        'points': parsePoints(
+                            runtime.getField(e, "points"), runtime),
+                        'color': runtime.getField(
+                            runtime.getField(e, "color"), "js-value").app(),
                         'type': e["$name"]
                     };
                 }
@@ -848,6 +921,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                 }
             });
             putLabel(label, WIDTH, HEIGHT, detached);
+            createSave(detached);
             callBigBang(runtime, detached);
         };
     }
@@ -859,7 +933,8 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
             var dataPoints = flatten(runtime.ffi.toArray(lst).map(
                 function (p) {
                     if (runtime.hasField(p, "points")) {
-                        return parsePoints(runtime.getField(p, "points"), runtime);
+                        return parsePoints(
+                            runtime.getField(p, "points"), runtime);
                     } else {
                         return [];
                     }
@@ -875,16 +950,16 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
             } else {
                 xMin = dataPoints
                     .map( function (d) { return d.x; } )
-                    .reduce(numLib.min);
+                    .reduce(libNum.min);
                 xMax = dataPoints
                     .map( function (d) { return d.x; } )
-                    .reduce(numLib.max);
+                    .reduce(libNum.max);
                 yMin = dataPoints
                     .map( function (d) { return d.y; } )
-                    .reduce(numLib.min);
+                    .reduce(libNum.min);
                 yMax = dataPoints
                     .map( function (d) { return d.y; } )
-                    .reduce(numLib.max);
+                    .reduce(libNum.max);
 
                 var blockPortion = 10;
                 var xOneBlock = jsnums.divide(jsnums.subtract(xMax, xMin),
@@ -919,13 +994,20 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
 
     function generateXY(runtime) {
         return function(f, xMin, xMax, yMin, yMax) {
+            runtime.checkArity(5, arguments, "generate-xy");
+            runtime.checkFunction(f);
+            runtime.checkNumber(xMin);
+            runtime.checkNumber(xMax);
+            runtime.checkNumber(yMin);
+            runtime.checkNumber(yMax);
+
             // Produces "rough" data points to be used for plotting
             // It is rough because it assumes that f is continuous
             var width = WIDTH,
                 height = HEIGHT;
 
-            var inputScaler = numLib.scaler(0, width - 1, xMin, xMax, false),
-                outputScaler = numLib.scaler(yMin, yMax, height - 1, 0, false);
+            var inputScaler = libNum.scaler(0, width - 1, xMin, xMax, false),
+                outputScaler = libNum.scaler(yMin, yMax, height - 1, 0, false);
 
             function addPoint(dataPoints, i) {
                 // Consumes old data points and produces a new data points
@@ -946,7 +1028,7 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
                     return dataPoints;
                 }
 
-                var possibleY = numLib.adjustInRange(y, yMin, yMax);
+                var possibleY = libNum.adjustInRange(y, yMin, yMax);
 
                 groupedPoints.push({
                     'x': i,
@@ -1048,8 +1130,9 @@ define(["d3", "d3tip", "js/js-numbers"], function (d3, d3tip, jsnums) {
         'generateXY': generateXY,
         'histogramPlot': histogramPlot,
         'pieChart': pieChart,
+        'treeDiagram': treeDiagram,
         'showSVG': showSVG,
-        'getBBox': getBBoxXML,
+        'getBBox': getBBox,
         'test': test
     };
 });
