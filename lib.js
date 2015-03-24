@@ -201,6 +201,8 @@ define(["d3", "d3tip", "js/js-numbers", "my-project/libJS", "my-project/libNum"]
             var allheight = height + MARGIN.top + MARGIN.bottom;
             canvas.attr("transform",
                         svgTranslate(allwidth / 2, allheight / 2));
+        } else {
+            throw "orient '" + orient  + "' not implemented";
         }
         return canvas;
     }
@@ -217,47 +219,36 @@ define(["d3", "d3tip", "js/js-numbers", "my-project/libJS", "my-project/libNum"]
         detached.append('button')
             .text('Save!')
             .on('click', function() {
-
                 var svg = detached.select("svg")
                     .attr("version", 1.1)
                     .attr("xmlns", "http://www.w3.org/2000/svg");
-
-                detached.append('canvas')
+                var canvas = detached.append('canvas')
                     .style('display', 'none')
                     .attr('width', svg.attr("width"))
                     .attr('height', svg.attr("height"));
-                detached.append('div')
-                    .attr('id', 'svgdataurl')
+                var svgData = detached.append('div')
                     .style('display', 'none');
-                detached.append('div')
-                    .attr('id', 'pngdataurl')
-                    .style('display', 'none');
-
                 var html = detached.node().firstChild.innerHTML;
-                var imgsrc = 'data:image/svg+xml;base64,'+ btoa(html);
-                var img = '<img src="'+imgsrc+'">';
-                detached.select("#svgdataurl").html(img);
-
+                var imgsrc = 'data:image/svg+xml;base64,' + btoa(html);
+                var img = '<img src="' + imgsrc + '">';
+                svgData.html(img);
 
                 var image = new Image;
                 image.src = imgsrc;
                 image.onload = function() {
-
                     var opts = {
-                        canvas: detached.select("canvas").node(),
+                        canvas: canvas.node(),
                         image: image
                     };
-
-                    var canvas = libJS.drawImage(opts);
-
-                    var canvasdata = canvas.toDataURL("image/png");
-
-                    var pngimg = '<img src="'+canvasdata+'">';
-                    detached.select("#pngdataurl").html(pngimg);
                     var a = document.createElement("a");
                     a.download = "sample.png";
-                    a.href = canvasdata;
+                    a.href = libJS.drawImage(opts).toDataURL("image/png");;
                     a.click();
+
+                    // the image's size was doubled everytime we click the button
+                    // remove all data to prevent this to happen
+                    svgData.remove();
+                    canvas.remove();
                 };
             });
     }
@@ -877,6 +868,7 @@ define(["d3", "d3tip", "js/js-numbers", "my-project/libJS", "my-project/libNum"]
             }
 
             update(root);
+            createSave(detached);
             callBigBang(runtime, detached);
         };
     }

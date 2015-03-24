@@ -1,15 +1,15 @@
 define(["d3"], function (d3) {
-    /*
-     * Writes an image into a canvas taking into
-     * account the backing store pixel ratio and
-     * the device pixel ratio.
-     *
-     * http://www.html5rocks.com/en/tutorials/canvas/hidpi/
-     *
-     * @author Paul Lewis
-     * @param {Object} opts The params for drawing an image to the canvas
-     */
     function drawImage(opts) {
+        /*
+         * Writes an image into a canvas taking into
+         * account the backing store pixel ratio and
+         * the device pixel ratio.
+         *
+         * http://www.html5rocks.com/en/tutorials/canvas/hidpi/
+         *
+         * @author Paul Lewis
+         * @param {Object} opts The params for drawing an image to the canvas
+         */
         if(!opts.canvas) {
             throw("A canvas is required");
         }
@@ -102,9 +102,17 @@ define(["d3"], function (d3) {
         return bbox;
     }
 
+    function htmlspecialchars(text) {
+        var div = document.createElement('div');
+        var textNode = document.createTextNode(text);
+        div.appendChild(textNode);
+        return div.innerHTML;
+    }
+
     return {
         'drawImage': drawImage,
         'getBBox': getBBox,
-        'getBoundingClientRect': getBoundingClientRect
+        'getBoundingClientRect': getBoundingClientRect,
+        'htmlspecialchars': htmlspecialchars
     };
 });
