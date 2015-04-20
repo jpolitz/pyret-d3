@@ -8,7 +8,7 @@ requirejs.config({
 });
 requirejs.undef("@js-http/" + baseUrl + "main.js");
 requirejs.undef("my-project/lib");
-requirejs.undef("my-project/libJS");
+//requirejs.undef("my-project/libJS");
 define(["js/runtime-util", "my-project/lib", "trove/string-dict", "trove/image-lib"],
        function(util, lib, sdLib, imageLib) {
            return function(runtime, namespace) {

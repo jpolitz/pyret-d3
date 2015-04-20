@@ -25,17 +25,37 @@ function flatten(lst) {
      * @param {array} lst
      * @return {array}
      */
-    return lst.reduce(
-        function (outter, inner) {
-            return outter.concat(inner);
-        }, []);
+    return [].concat.apply([], lst);
 }
+
+assert(flatten([[1, 2], [3, 4], [5, 6]]).toString() ===
+       [1, 2, 3, 4, 5, 6].toString());
+assert(flatten([[[1, 2]], [], [[5, 6]]]).toString() ===
+       [[1, 2], [5, 6]].toString());
 
 function fill(n, v) {
     var i, ret = [];
-    for (i = 0; i < n; i++) { ret.push(v); }
+    for (i = 0; i < n; i++) {
+        ret.push(v);
+    }
     return ret;
 }
+
+function range(st, ed) {
+    var i, ret = [];
+    for (i = st; i < ed; i++) {
+        ret.push(i);
+    }
+    return ret;
+}
+
+function shuffle(o){
+    //+ Jonas Raoni Soares Silva
+    //@ http://jsfromhell.com/array/shuffle [v1.0]
+    for(var j, x, i = o.length; i;
+        j = Math.floor(Math.random() * i), x = o[--i], o[i] = o[j], o[j] = x);
+    return o;
+};
 
 function assert(val, msg) {
     if (!val) { throw new Error("Assertion failed: " + (msg || "")); }
@@ -1567,6 +1587,9 @@ define(
                 }
                 
                 plots.forEach(function (e) {
+                    // would be nice to use cases like in 
+                    // http://cs.brown.edu/~joe/public/docs/ffi.html#%28part._.F.F.I_cases%29
+                    // But HOW?
                     if (e.type === "line-plot-int") {
                         plotLine(e.points, e.id, xMin, xMax, yMin, yMax,
                                  width, height, canvas);
@@ -1665,19 +1688,24 @@ define(
         
         function generateXY(runtime) {
             return function (f, xMin, xMax, yMin, yMax) {
+                var startTime = new Date();
                 runtime.checkArity(5, arguments, "generate-xy");
                 runtime.checkFunction(f);
                 runtime.checkNumber(xMin);
                 runtime.checkNumber(xMax);
                 runtime.checkNumber(yMin);
                 runtime.checkNumber(yMax);
+                if (jsnums.greaterThanOrEqual(xMin, xMax) ||
+                    jsnums.greaterThanOrEqual(yMin, yMax)) {
+                    runtime.throwMessageException(CError.RANGE);
+                }
 
                 var margin = MARGIN,
                     dimension = getDimension(margin),
                     width = dimension.width,
                     height = dimension.height,
                     K = 500,
-                    DELTA = 0.01;
+                    DELTA = 0.001;
 
                 var inputScaler = libNum.scaler(
                         0, width - 1, xMin, xMax, false),
@@ -1733,9 +1761,24 @@ define(
                         return Number.isNaN(v.py);
                     });
                 }
+                
+                logtable = [];
+                for(var i = 0; i < width; ++i) {
+                    logtable.push(new LogTable(height));
+                }
+
+                function occupy(pt) {
+                    logtable[Math.floor(pt.px)].occupy(Math.floor(pt.py));
+                }
+                
+                function isAllOccupied(left, right) {
+                    return logtable[Math.floor(left.px)].isRangedOccupied(
+                        Math.floor(left.py), Math.floor(right.py));
+                }
 
                 // bplot([list: xy-plot(_ + 1, I.red)], -10, 10, -10, 10, "abc")
                 // bplot([list: xy-plot(1 / _, I.red)], -10, 10, -10, 10, "abc")
+                // bplot([list: xy-plot(lam(x): num-sin(1 / x) end, I.red)], -10, 10, -10, 10, "abc")
                 function divideSubinterval(left, right) {
                     /*
                     Input: two X values
@@ -1744,55 +1787,81 @@ define(
                     invalid for K points indicate that it should not be plotted!
                     */
                     
+                    occupy(left);
+                    occupy(right);
+                    
                     if (closeEnough(left, right)) {
                         return [[left, right]];
                     } else if (tooClose(left, right)) {
                         return [];
+                    } else if (isSamePX(left, right) && 
+                        isAllOccupied(left, right)) {
+                            return [[left, right]];
                     } else {
                         var scalerSubinterval = libNum.scaler(
                             0, K, left.x, right.x, false);
 
-                        var points = fill(K, 0).map(function (v, i) {
+                        var points = range(0, K).map(function (i) {
                             return new PointCoord(scalerSubinterval(i));
                         });
                         
                         if (allInvalid(points)) {
                             return [];
                         } else {
-                            var intervals = fill(K - 1, 0).map(function (v, i) {
-                                return divideSubinterval(
-                                    points[i], points[i + 1]);
-                            });
-                            intervals = [].concat.apply([], intervals);
-                            return intervals.reduce(
-                                function(dataPoints, val) {
-                                    if (dataPoints.length > 0) {
-                                        var prev = dataPoints.pop();
-                                        if (prev.length > 0 && val.length > 0) {
-                                            if (closeEnough(
-                                                lastElement(prev), val[0])) {
-                                                val.shift();
-                                                dataPoints.push(
-                                                    prev.concat(val));
-                                            } else {
-                                                dataPoints.push(prev);
-                                                dataPoints.push(val);
-                                            }
-                                        } else {
-                                            dataPoints.push(prev);
-                                            dataPoints.push(val);
-                                        }
-                                    } else {
-                                        dataPoints.push(val);
-                                    }
-                                    return dataPoints;
-                            }, []);
+                            var skip = false;
+                            var intervals = [];
+                            var shuffled = shuffle(range(0, K - 1));
+                            for (var i = 0; i < K - 1; i++) {
+                                var v = shuffled[i];
+                                intervals.push(divideSubinterval(
+                                    points[v], points[v + 1]
+                                ));
+                                if (isSamePX(left, right) && 
+                                    isAllOccupied(left, right)) {
+                                        return [[left, right]];
+                                }
+                            }  
+                            return flatten(intervals);
                         }
                     }
                 }
         
                 var ans = divideSubinterval(new PointCoord(xMin),
                                             new PointCoord(xMax))
+                
+                ans.sort(function(a, b) {
+                    if (a[0].px == b[0].px) {
+                        return a[0].py - b[0].py;
+                    }
+                    return a[0].px - b[0].px;
+                });
+                
+                ans = ans.reduce(
+                    function(dataPoints, val) {
+                        if (dataPoints.length > 0) {
+                            var prev = dataPoints.pop();
+                            if (prev.length > 0 && val.length > 0) {
+                                if (closeEnough(
+                                    lastElement(prev), val[0])) {
+                                    val.shift();
+                                    dataPoints.push(
+                                        prev.concat(val));
+                                } else {
+                                    dataPoints.push(prev);
+                                    dataPoints.push(val);
+                                }
+                            } else {
+                                dataPoints.push(prev);
+                                dataPoints.push(val);
+                            }
+                        } else {
+                            dataPoints.push(val);
+                        }
+                        return dataPoints;
+                }, []);
+                
+                console.log('length', ans.length);
+                
                 ans = ans.map(
                     function (lst) {
                             return lst.map(function (dp) {
@@ -1802,6 +1871,10 @@ define(
                                 });
                             });
                         }).map(runtime.ffi.makeList);
+                var endTime = new Date();
+                var timeDiff = endTime - startTime;
+                timeDiff /= 1000;
+                console.log(timeDiff);
                 return runtime.ffi.makeList(ans);
             };
         }
