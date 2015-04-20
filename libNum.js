@@ -1,5 +1,5 @@
 define(["d3", "js/js-numbers"], function (d3, jsnums) {
-    function scaler(oldX, oldY, newX, newY, toInt) {
+    function scaler(oldX, oldY, newX, newY, toFixnum) {
         /*
          * Produces a scaler function to convert a value in
          * an interval to another value in a new interval
@@ -19,7 +19,7 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
             var newRange = jsnums.subtract(newY, newX);
             var newPortion = jsnums.multiply(portion, newRange);
             var result = jsnums.add(newPortion, newX);
-            return toInt ? Math.floor(jsnums.toFixnum(result)) : result;
+            return toFixnum ? jsnums.toFixnum(result) : result;
         };
     }
 

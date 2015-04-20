@@ -1,12 +1,12 @@
 /*
  * pyret-d3
  */
-'use strict';
 
-var WIDTH = 401;
-var HEIGHT = 401;
 var MARGIN = {'top': 30, 'left': 100, 'bottom': 45, 'right': 100};
+var NOMARGIN = {'top': 0, 'left': 0, 'bottom': 0, 'right': 0};
 var HISTOGRAMN = 100;
+var ALLHEIGHT = 476;
+var ALLWIDTH = 601;
 
 function lastElement(arr) {
     /*
@@ -26,26 +26,33 @@ function flatten(lst) {
      * @return {array}
      */
     return lst.reduce(
-        function(outter, inner) { return outter.concat(inner); },
-        []);
+        function (outter, inner) {
+            return outter.concat(inner);
+        }, []);
 }
 
 function fill(n, v) {
-    var ret = [];
-    for (var i = 0; i < n; ++i) ret.push(v);
+    var i, ret = [];
+    for (i = 0; i < n; i++) { ret.push(v); }
     return ret;
 }
 
 function assert(val, msg) {
-    if (!val) throw new Error("Assertion failed: " + (msg || ""));
+    if (!val) { throw new Error("Assertion failed: " + (msg || "")); }
 }
 
 function svgTranslate(x, y) {
     if (y === undefined) {
         return "translate(" + x.toString() + ")";
-    } else {
-        return "translate(" + x.toString() + "," + y.toString() + ")";
     }
+    return "translate(" + x.toString() + "," + y.toString() + ")";
+}
+
+function getContrast(r, g, b){
+    /*
+     * http://24ways.org/2010/calculating-color-contrast/
+     */
+	return ((((r*299)+(g*587)+(b*114))/1000) >= 128) ? 'black' : 'white';
 }
 
 function FenwickTree(n) {
@@ -101,7 +108,7 @@ function FenwickTree(n) {
          */
         return this.sum(r) - this.sum(l - 1);
     };
-};
+}
 
 /*
  var testFenwick = new FenwickTree(10);
@@ -158,7 +165,43 @@ function LogTable(n) {
             return this.fenwick.sumInterval(l, r) === (r - l + 1);
         }
     };
-};
+}
+
+function convertColor(runtime, image) {
+    function p(pred, name) {
+        return function (val) {
+            runtime.makeCheckType(pred, name)(val);
+            return val;
+        };
+    }
+    
+    var colorDb = image.colorDb,
+        _checkColor = p(image.isColorOrColorString, "Color");
+
+    function checkColor(val) {
+        var aColor = _checkColor(val);
+        if (colorDb.get(aColor)) {
+            aColor = colorDb.get(aColor);
+        }
+        return aColor;
+    }
+
+    function colorString(aColor) {
+        return "rgba(" + image.colorRed(aColor) + "," +
+            image.colorGreen(aColor) + ", " +
+            image.colorBlue(aColor) + ", " +
+            image.colorAlpha(aColor) + ")";
+    }
+
+    return function (v) { return colorString(checkColor(v)); };
+}
+
+function getDimension(margin) {
+    return {
+        width: ALLWIDTH - margin.left - margin.right,
+        height: ALLHEIGHT - margin.top - margin.bottom
+    };
+}
 
 var CError = {
     "RANGE": "x-min and y-min must be strictly less than " +
@@ -168,38 +211,6 @@ var CError = {
 define(
     ["d3", "d3tip", "js/js-numbers", "my-project/libJS", "my-project/libNum"],
     function (d3, d3tip, jsnums, libJS, libNum) {
-
-
-        function convertColor(image) {
-            var colorDb = image.colorDb;
-
-            var p = function(pred, name) {
-                return function(val) {
-                    runtime.makeCheckType(pred, name)(val);
-                    return val;
-                };
-            };
-
-            var _checkColor = p(image.isColorOrColorString, "Color");
-
-            var checkColor = function(val) {
-                var aColor = _checkColor(val);
-                if (colorDb.get(aColor)) {
-                    aColor = colorDb.get(aColor);
-                }
-                return aColor;
-            };
-
-            var colorString = function(aColor) {
-                return "rgba(" + image.colorRed(aColor) + "," +
-                    image.colorGreen(aColor) + ", " +
-                    image.colorBlue(aColor) + ", " +
-                    image.colorAlpha(aColor) + ")";
-            };
-
-            return function(v) { return colorString(checkColor(v)); };
-        }
-
         function createDiv() {
             /*
              * Creates a blank div
@@ -210,7 +221,7 @@ define(
                 .attr('class', 'maind3');
         }
 
-        function createCanvas(width, height, detached, orient) {
+        function createCanvas(detached, margin, orient) {
             /*
              * Creates a canva
              *
@@ -220,30 +231,44 @@ define(
              * @param {string} orient
              * @return {d3 selection}
              */
-
-            var divSvg = detached.append('div');
-            var canvas = divSvg
+            var divSvg = detached
+                    .append('div')
+                    .attr('class', 'divsvg'),
+                canvas = divSvg
                     .append("svg")
-                    .attr("width", width + MARGIN.left + MARGIN.right)
-                    .attr("height", height + MARGIN.top + MARGIN.bottom)
+                    .attr("width", ALLWIDTH)
+                    .attr("height", ALLHEIGHT)
                     .append("g")
                     .attr('class', 'maing')
                     .append('g');
 
             if (orient === "top-left") {
-                canvas.attr("transform", svgTranslate(MARGIN.left, MARGIN.top));
+                canvas.attr("transform", svgTranslate(margin.left, margin.top));
             } else if (orient == "center") {
-                var allwidth = width + MARGIN.left + MARGIN.right;
-                var allheight = height + MARGIN.top + MARGIN.bottom;
-                canvas.attr("transform", svgTranslate(allwidth / 2, allheight / 2));
+                canvas.attr("transform",
+                    svgTranslate(ALLWIDTH / 2, ALLHEIGHT / 2));
             } else {
                 throw "orient '" + orient  + "' not implemented"; // internal error
             }
             return canvas;
         }
 
+        function postStyle(detached) {
+            detached.selectAll('.d3btn').style({
+                'margin-right': '20px'
+            })
+        }
+
         function callBigBang(runtime, detached) {
+            postStyle(detached);
             runtime.getParam("current-animation-port")(detached.node());
+            var terminate = function () {  d3.selectAll(".maind3").remove(); };
+            
+            // simulate dialogclose
+            d3.selectAll(".ui-dialog-titlebar-close").on("click", terminate);
+            d3.select("body").on("keyup", function(e) {
+                if (d3.event.keyCode == 27) { terminate(); } // esc
+            });
         }
 
         function createSave(detached) {
@@ -254,36 +279,44 @@ define(
              * http://techslides.com/save-svg-as-an-image
              */
             detached.append('button')
+                .attr('class', 'd3btn')
                 .text('Save!')
-                .on('click', function() {
+                .on('click', function () {
                     var svg = detached.select("svg")
                             .attr("version", 1.1)
-                            .attr("xmlns", "http://www.w3.org/2000/svg");
-                    var canvas = detached.append('canvas')
+                            .attr("xmlns", "http://www.w3.org/2000/svg"),
+                            
+                        canvas = detached.append('canvas')
                             .style('display', 'none')
                             .attr('width', svg.attr("width"))
-                            .attr('height', svg.attr("height"));
-                    var svgData = detached.append('div')
-                            .style('display', 'none');
-                    var html = detached.node().firstChild.innerHTML;
-                    var imgsrc = 'data:image/svg+xml;base64,' + btoa(html);
-                    var img = '<img src="' + imgsrc + '">';
+                            .attr('height', svg.attr("height")),
+                            
+                        svgData = detached.append('div')
+                            .style('display', 'none'),
+                            
+                        html = detached.node().firstChild.innerHTML,
+                            
+                        imgsrc = 'data:image/svg+xml;base64,' + btoa(html),
+                            
+                        img = '<img src="' + imgsrc + '">';
+                        
                     svgData.html(img);
 
                     var image = new Image;
                     image.src = imgsrc;
-                    image.onload = function() {
+                    image.onload = function () {
                         var opts = {
                             canvas: canvas.node(),
                             image: image
                         };
                         var a = document.createElement("a");
                         a.download = "sample.png";
-                        a.href = libJS.drawImage(opts).toDataURL("image/png");;
+                        a.href = libJS.drawImage(opts).toDataURL("image/png");
                         a.click();
 
-                        // the image's size was doubled everytime we click the button
-                        // remove all data to prevent this to happen
+                        // the image's size was doubled everytime we click 
+                        // the button, so remove all data to prevent this
+                        // to happen
                         svgData.remove();
                         canvas.remove();
                     };
@@ -304,9 +337,10 @@ define(
              */
 
             function getAxisConf(aMin, aMax) {
-                var conf = {};
-                var scaler = libNum.scaler(aMin, aMax, 0, 1, false);
-                var pos = jsnums.toFixnum(scaler(0));
+                var conf = {},
+                    scaler = libNum.scaler(aMin, aMax, 0, 1, false),
+                    pos = jsnums.toFixnum(scaler(0));
+                    
                 if (0 <= pos && pos <= 1) {
                     conf.bold = true;
                     conf.pos = pos;
@@ -325,10 +359,12 @@ define(
             xAxisConf.pos = 1 - xAxisConf.pos;
 
             var tickNum = 6; // TODO: why 6, not 7?
+            
             var xAxisScaler = d3.scale.linear()
                     .domain([0, tickNum]).range([0, width - 1]),
                 yAxisScaler = d3.scale.linear()
                     .domain([0, tickNum]).range([height - 1, 0]);
+                    
             var allValues = d3.range(0, tickNum + 1);
 
             var xAxisDisplayScaler = libNum.scaler(0, tickNum, xMin, xMax),
@@ -404,72 +440,6 @@ define(
                 });
         }
 
-        function plotLine(
-            dataPoints, id, xMin, xMax, yMin, yMax,
-            width, height, color, canvas) {
-            /*
-             * Graph a line
-             *
-             * Part of this function is adapted from
-             * http://jsfiddle.net/christopheviau/Hwpe3/
-             */
-
-            var xToPixel = libNum.scaler(xMin, xMax, 0, width - 1, true),
-                yToPixel = libNum.scaler(yMin, yMax, height - 1, 0, true);
-
-            var line = d3.svg.line()
-                    .x(function (d) { return xToPixel(d.x); })
-                    .y(function (d) { return yToPixel(d.y); });
-
-            canvas.append("path")
-                .attr("class", "plotting" + id.toString())
-                .attr("d", line(dataPoints));
-
-            canvas.selectAll('.plotting' + id.toString()).style(
-                {'stroke': color, 'stroke-width': 1, 'fill': 'none'});
-        }
-
-        function plotPoints(
-            dataPoints, id, xMin, xMax, yMin, yMax,
-            width, height, color, canvas, detached) {
-            /*
-             * Plot data points (scatter plot)
-             *
-             * Part of this function is adapted from
-             * http://alignedleft.com/tutorials/d3/making-a-scatterplot
-             */
-
-            var xToPixel = libNum.scaler(xMin, xMax, 0, width - 1, true),
-                yToPixel = libNum.scaler(yMin, yMax, height - 1, 0, true);
-
-            var tip = d3tip(detached)
-                    .attr('class', 'd3-tip')
-                    .direction('e')
-                    .offset([0, 20])
-                    .html(function (d) {
-                        var x = libNum.format(d.x, 6);
-                        var y = libNum.format(d.y, 6);
-                        return "x: " + x.toString() + "<br />" +
-                            "y: " + y.toString() + "<br />";
-                    });
-
-            canvas.call(tip);
-
-            canvas.selectAll("circle")
-                .data(dataPoints)
-                .enter()
-                .append("circle")
-                .attr("class", "scatter-plot" + id.toString())
-                .attr("cx", function (d) { return xToPixel(d.x); })
-                .attr("cy", function (d) { return yToPixel(d.y); })
-                .attr("r", 2)
-                .on("mouseover", tip.show)
-                .on("mouseout", tip.hide);
-
-            canvas.selectAll('.scatter-plot' + id.toString()).style('fill', color);
-            stylizeTip(detached);
-        }
-
         function plotBar(xMin, xMax, yMin, yMax, width, height,
                          data, histogramn, detached, canvas) {
 
@@ -485,7 +455,7 @@ define(
                     .range([0, width]);
 
             var y = d3.scale.linear()
-                    .domain([0, d3.max(data, function(d) { return d.y; })])
+                    .domain([0, d3.max(data, function (d) { return d.y; })])
                     .range([height, 0]);
 
             var tip = d3tip(detached)
@@ -510,10 +480,10 @@ define(
                     .on("mouseout", tip.hide);
 
             bar.append("rect")
-                .attr("x", function(d) { return x(d.x); })
-                .attr("y", function(d) { return y(d.y); })
+                .attr("x", function (d) { return x(d.x); })
+                .attr("y", function (d) { return y(d.y); })
                 .attr("width", x(data[0].dx) - 1)
-                .attr("height", function(d) { return height - y(d.y); });
+                .attr("height", function (d) { return height - y(d.y); });
 
             canvas.selectAll('.bar rect')
                 .style({
@@ -521,17 +491,17 @@ define(
                     'fill-opacity': '0.8',
                     'shape-rendering': 'crispEdges'
                 })
-                .on('mouseover', function(d) {
+                .on('mouseover', function (d) {
                     d3.select(this).style('fill', "black");
                 })
-                .on('mouseout', function(d) {
+                .on('mouseout', function (d) {
                     d3.select(this).style('fill', "steelblue");
                 });
 
             stylizeTip(detached);
         }
 
-        function putLabel(label, width, height, detached) {
+        function putLabel(label, width, height, detached, margin) {
             var supportedTags = [
                 ["<sup>", "<tspan baseline-shift='super'>"],
                 ["</sup>", "</tspan>"],
@@ -539,14 +509,15 @@ define(
                 ["</sub>", "</tspan>"]
             ];
 
-            var processedLabel = supportedTags.reduce(function(prev, current) {
-                return prev.replace(libJS.htmlspecialchars(current[0]), current[1]);
+            var processedLabel = supportedTags.reduce(function (prev, current) {
+                return prev.replace(
+                    libJS.htmlspecialchars(current[0]), current[1]);
             }, libJS.htmlspecialchars(label));
 
             var legend = detached.select('.maing')
                     .append("text")
-                    .attr("x", (MARGIN.left + width + MARGIN.right) / 2)
-                    .attr("y", height + MARGIN.top + 30)
+                    .attr("x", (margin.left + width + margin.right) / 2)
+                    .attr("y", height + margin.top + 30)
                     .html(processedLabel);
 
             legend.style({
@@ -567,9 +538,9 @@ define(
             );
         }
 
-        ///////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////
 
         function showSVG(runtime) {
             return function (xml) {
@@ -622,21 +593,29 @@ define(
 
                 var xMin = data.reduce(libNum.min);
                 var xMax = data.reduce(libNum.max);
-                var dataScaler = libNum.scaler(xMin, xMax, 0, HISTOGRAMN, false);
+                var dataScaler = libNum.scaler(
+                    xMin, xMax, 0, HISTOGRAMN, false);
 
                 var histogramData = d3.layout.histogram()
                         .bins(n).value(function (val) {
                             return jsnums.toFixnum(dataScaler(val));
                         })(data);
 
-                var yMax = d3.max(histogramData, function(d) { return d.y; });
+                var yMax = d3.max(histogramData, function (d) { return d.y; });
+
+                var margin = MARGIN,
+                    dimension = getDimension(margin),
+                    width = dimension.width,
+                    height = dimension.height;
+                
 
                 var detached = createDiv();
-                var canvas = createCanvas(WIDTH, HEIGHT, detached, "top-left");
+                var canvas = createCanvas(detached, margin, "top-left");
+                
 
-                appendAxis(xMin, xMax, 0, yMax, WIDTH, HEIGHT, canvas);
+                appendAxis(xMin, xMax, 0, yMax, width, height, canvas);
 
-                plotBar(xMin, xMax, 0, yMax, WIDTH, HEIGHT,
+                plotBar(xMin, xMax, 0, yMax, width, height,
                         histogramData, HISTOGRAMN, detached, canvas);
 
                 callBigBang(runtime, detached);
@@ -654,7 +633,7 @@ define(
                 var annImmutable = sd.dict["provide-plus-types"]
                         .dict.types.StringDict;
 
-                var checkISD = function(v) {
+                var checkISD = function (v) {
                     runtime._checkAnn(["string-dict"], annImmutable, v);
                 };
 
@@ -680,7 +659,12 @@ define(
 
                 var scaler = libNum.scaler(0, sum, 0, 100);
 
-                var radius = Math.min(WIDTH, HEIGHT) / 2;
+                var margin = MARGIN,
+                    dimension = getDimension(margin),
+                    width = dimension.width,
+                    height = dimension.height;
+
+                var radius = Math.min(width, height) / 2;
                 var color = d3.scale.category20();
                 var arc = d3.svg.arc()
                         .outerRadius(radius)
@@ -688,7 +672,7 @@ define(
 
                 var pie = d3.layout.pie()
                         .sort(null)
-                        .value(function(d) { return d.value; });
+                        .value(function (d) { return d.value; });
 
                 var detached = createDiv();
 
@@ -705,7 +689,7 @@ define(
                                         scaler(d.data.value)), 7) + "%";
                         });
 
-                var canvas = createCanvas(WIDTH, HEIGHT, detached, "center");
+                var canvas = createCanvas(detached, margin, "center");
                 canvas.call(tip);
 
                 var g = canvas.selectAll(".arc")
@@ -716,14 +700,14 @@ define(
                 g.append("path").attr("class", "path").attr("d", arc);
 
                 g.append("text")
-                    .attr("transform", function(d) {
+                    .attr("transform", function (d) {
                         return "translate(" + arc.centroid(d) + ")";
                     })
                     .attr("dy", ".35em")
                     .style({
                         "text-anchor": "middle"
                     })
-                    .text(function(d) { return d.data.label; });
+                    .text(function (d) { return d.data.label; });
 
                 g.append("path").attr("class", "transparent").attr("d", arc);
 
@@ -731,7 +715,7 @@ define(
 
                 canvas.selectAll(".arc path")
                     .style({
-                        "fill": function(d, i) { return color(i); }
+                        "fill": function (d, i) { return color(i); }
                     })
                     .on("mouseover", function (e) {
                         d3.select(this.parentNode)
@@ -765,20 +749,36 @@ define(
             return function (rawGraph) {
                 runtime.checkArity(1, arguments, "force-layout");
                 runtime.checkObject(rawGraph);
+                
+                var isDirected;
+                
+                if (rawGraph['$name'] == "undirected-graph") {
+                    isDirected = false;
+                } else if (rawGraph['$name'] == "directed-graph") {
+                    isDirected = true;
+                } else {
+                    throw 'not Graph'
+                }
 
-                var colorConverter = convertColor(image);
+                var margin = NOMARGIN,
+                    dimension = getDimension(margin),
+                    width = dimension.width,
+                    height = dimension.height;
+
+                var colorConverter = convertColor(runtime, image);
 
                 var nodes = runtime.ffi.toArray(
                     runtime.getField(rawGraph, "vertices")).map(
-                        function(e) {
+                        function (e, i) {
                             return {
                                 'name': runtime.getField(e, "name"),
-                                'color': colorConverter(runtime.getField(e, "color"))
+                                'color': runtime.getField(e, "color"),
+                                'index': i
                             };
                         });
 
-                var indices = nodes.reduce(function (prev, current, index) {
-                    prev[current.name] = index;
+                var indices = nodes.reduce(function (prev, current) {
+                    prev[current.name] = current.index;
                     return prev;
                 }, {});
 
@@ -786,56 +786,68 @@ define(
                 var totalLinks = {};
                 var links = runtime.ffi.toArray(
                     runtime.getField(rawGraph, "edges")).map(
-                        function(e) {
+                        function (e) {
                             return {
-                                'source': indices[runtime.getField(runtime.getField(e, "source"), "name")],
-                                'target': indices[runtime.getField(runtime.getField(e, "target"), "name")],
+                                'source': nodes[indices[runtime.getField(
+                                    runtime.getField(e, "source"), "name")]],
+                                'target': nodes[indices[runtime.getField(
+                                    runtime.getField(e, "target"), "name")]],
                                 'linkindex': 0,
-                                'label': runtime.getField(e, "label")
+                                'label': runtime.getField(e, "label"),
+                                'color': runtime.getField(e, "color")
                             };
                         });
 
-                // haven't call .start() why is it activated???
-
-                links.sort(function(a, b) {
-                    if (a.source.id == b.source.id) return a.target.id - b.target.id;
-                    return a.source.id - b.source.id;
+                links.sort(function (a, b) {
+                    assert(a.source.index !== undefined);
+                    if (a.source.index == b.source.index) {
+                        return a.target.index - b.target.index;
+                    }
+                    return a.source.index - b.source.index;
                 });
+                
+                function idEdge(d) {
+                    return d.source.index + "_" + d.target.index + "_" +
+                         d.linkindex;
+                }
 
                 links.forEach(function (v, i) {
+                    assert(links[i].source.index !== undefined);
                     if (i > 0 &&
-                        links[i].source == links[i - 1].source &&
-                        links[i].target == links[i - 1].target) {
+                        links[i].source.index == links[i - 1].source.index &&
+                        links[i].target.index == links[i - 1].target.index) {
 
                         links[i].linkindex = links[i - 1].linkindex + 1;
                     }
-                    totalLinks[links[i].source.id + ',' + links[i].target.id] = links[i].linkindex + 1;
+                    totalLinks[links[i].source.index + ',' + links[i].target.index] =
+                        links[i].linkindex + 1;
                 });
 
                 var detached = createDiv();
-                var canvas = createCanvas(WIDTH, HEIGHT, detached, "top-left");
+                
+                var canvas = createCanvas(detached, margin, "top-left");
 
-                detached.attr("tabindex", 1)
+                detached.select('.divsvg').attr("tabindex", 1)
                     .on("keydown.brush", keydown)
                     .on("keyup.brush", keyup)
-                    .each(function() { this.focus(); });
+                    .each(function () { this.focus(); });
 
-                var shiftKey;
+                var shiftKey, hideLabels = false;
 
                 var xScale = d3.scale.linear()
-                        .domain([0,WIDTH]).range([0,WIDTH]);
+                        .domain([0,width]).range([0,width]);
                 var yScale = d3.scale.linear()
-                        .domain([0,HEIGHT]).range([0, HEIGHT]);
+                        .domain([0,height]).range([0,height]);
 
                 var zoomer = d3.behavior.zoom().
-                    scaleExtent([0.1,10]).
+                    scaleExtent([0.5,5]).
                     x(xScale).
                     y(yScale).
                     on("zoomstart", zoomstart).
                     on("zoom", redraw);
 
                 function zoomstart() {
-                    node.each(function(d) {
+                    node.each(function (d) {
                         d.selected = false;
                         d.previouslySelected = false;
                     });
@@ -850,49 +862,50 @@ define(
                     update();
                 }
 
-
-             var brusher = d3.svg.brush()
-                //.x(d3.scale.identity().domain([0, width]))
-                //.y(d3.scale.identity().domain([0, height]))
+                var brusher = d3.svg.brush()
                         .x(xScale)
                         .y(yScale)
-                        .on("brushstart", function(d) {
-                            node.each(function(d) {
+                        .on("brushstart", function (d) {
+                            node.each(function (d) {
                                 d.previouslySelected = shiftKey && d.selected;
                             });
                             update();
                         })
-                        .on("brush", function() {
+                        .on("brush", function () {
                             var extent = d3.event.target.extent();
 
-                            node.classed("selected", function(d) {
-                                return d.selected = d.previouslySelected ^
-                                    (extent[0][0] <= d.x && d.x < extent[1][0]
-                                     && extent[0][1] <= d.y && d.y < extent[1][1]);
+                            node.classed("selected", function (d) {
+                                return d.selected = 
+                                    d.previouslySelected ^
+                                    (extent[0][0] <= d.x && 
+                                        d.x < extent[1][0] && 
+                                        extent[0][1] <= d.y &&
+                                        d.y < extent[1][1]);
                             });
                             update();
                         })
-                     .on("brushend", function() {
-                         d3.event.target.clear();
-                         d3.select(this).call(d3.event.target);
-                         update();
-                     });
+                        .on("brushend", function () {
+                            d3.event.target.clear();
+                            d3.select(this).call(d3.event.target);
+                            update();
+                        });
 
                 var svg_graph = canvas.append('g')
                         .call(zoomer);
                 //.call(brusher)
 
                 var brush = svg_graph.append("g")
-                        .datum(function() {
-                            return { selected: false, previouslySelected: false }; })
+                        .datum(function () {
+                            return {
+                                selected: false,
+                                previouslySelected: false
+                            };
+                        })
                         .attr("class", "brush");
 
                 var vis = svg_graph.append("g");
 
-                vis.attr('fill', 'red')
-                    .attr('stroke', 'black')
-                    .attr('stroke-width', 1)
-                    .attr('opacity', 0.5)
+                vis.attr('opacity', 0.4)
                     .attr('id', 'vis');
 
 
@@ -903,28 +916,76 @@ define(
                     .on("touchend.brush", null);
 
                 brush.select('.background').style('cursor', 'auto');
+                
+                vis.append("defs").selectAll("marker")
+                    .data(links).enter()
+                    .append("marker")
+                    .attr("id", function (d) { return "arrow_" + idEdge(d); })
+                    .attr("class", "link")
+                    .attr("viewBox", "0 -5 10 10")
+                    .attr("refX", 19)
+                    .attr("refY", -1)
+                    .attr("markerWidth", 3)
+                    .attr("markerHeight", 3)
+                    .attr("orient", "auto")
+                    .append("path")
+                    .attr("d", "M0,-5L10,0L0,5");
 
                 var link = vis.append("g")
                         .attr("class", "link")
                         .selectAll("path")
-                        .data(links).enter().append("path");
+                        .data(links).enter()
+                        .append("path")
+                        .attr("id", function(d) { return idEdge(d); })
+                        .on('mouseover', function(d) {
+                            var aClass = {
+                                'active': true,
+                                'inactive': false
+                            };
+                            d3.select(this).classed(aClass);
+                            d3.select('#arrow_' + idEdge(d)).classed(aClass);
+                            d3.select('#text_' + idEdge(d)).classed(aClass);
+                            update();
+                        })
+                        .on('mouseout', function(d) {
+                            var aClass = {
+                                'active': false,
+                                'inactive': true
+                            };
+                            d3.select(this).classed(aClass);
+                            d3.select('#arrow_' + idEdge(d)).classed(aClass);
+                            d3.select('#text_' + idEdge(d)).classed(aClass);
+                            update();
+                        });
+                    
+                if (isDirected) {
+                    link = link.attr("marker-end", function(d) {
+                        return "url(#arrow_" + idEdge(d) + ")";
+                    })
+                }
 
-                var nodearea = vis.append("g")
+                var node = vis.append("g")
                         .attr("class", "node")
                         .selectAll("circle")
-                        .data(nodes).enter();
-
-                var node = nodearea.append("circle")
-                        .attr("r", 4)
-                        .attr("fill", function(d) { return d.color; })
-                        .on("dblclick", function(d) { d3.event.stopPropagation(); })
-                        .on("click", function(d) {
+                        .data(nodes).enter()
+                        .append("circle")
+                        .attr("r", 8)
+                        .attr("fill", function (d) {
+                            return colorConverter(d.color);
+                        })
+                        .on("dblclick", function (d) {
+                            d3.event.stopPropagation();
+                        })
+                        .on("click", function (d) {
                             if (d3.event.defaultPrevented) return;
                             if (!shiftKey) {
-                                //if the shift key isn't down, unselect everything
+                                //if the shift key isn't down, 
+                                // unselect everything
                                 canvas.selectAll(".selected").classed(
-                                    'selected', function(p) {
-                                        return p.selected = p.previouslySelected = false;
+                                    'selected', function (p) {
+                                        p.selected = false;
+                                        p.previouslySelected = false;
+                                        return false;
                                     });
                             }
                             // always select this node
@@ -932,7 +993,7 @@ define(
                                 "selected", d.selected = !d.previouslySelected);
                             update();
                         })
-                        .on("mouseup", function(d) {
+                        .on("mouseup", function (d) {
                             //if (d.selected && shiftKey) d3.select(this).classed("selected", d.selected = false);
                         })
                         .call(d3.behavior.drag()
@@ -940,40 +1001,80 @@ define(
                               .on("drag", dragged)
                               .on("dragend", dragended));
 
-                var textnode = nodearea.append('text')
-                    .text(function(d) { return d.name; });
+              var textlink = vis.append('g')
+                      .selectAll(".link_label")
+                      .data(links).enter()
+                      .append('text')
+                      .attr('class', 'label link_label')
+                      .attr('id', function(d) { return 'text_' + idEdge(d); })
+                      .append('textPath')
+                      .attr('startOffset', '50%')
+                      .attr("text-anchor", "middle")
+                      .attr("xlink:href", function (d) {
+                          return "#" + idEdge(d);
+                      })
+                      .text(function (d) { return d.label; });
+
+                var textnode = vis.append('g')
+                        .selectAll('g')
+                        .data(nodes).enter()
+                        .append('g')
+
+                var DXTEXTNODE = 14;
+                var DYTEXTNODE = 4;
+
+                textnode.append('text')
+                        .attr('x', DXTEXTNODE)
+                        .attr('y', DYTEXTNODE)
+                        .attr("class", "shadow label")
+                        .attr('stroke', function (d) {
+                            return getContrast(
+                                image.colorRed(d.color),
+                                image.colorGreen(d.color),
+                                image.colorBlue(d.color));
+                        })
+                        .text(function(d) { return d.name; });
+                
+                textnode.append('text')
+                        .attr('x', DXTEXTNODE)
+                        .attr('y', DYTEXTNODE)
+                        .attr('class', 'label')
+                        .attr('fill', function (d) {
+                            return colorConverter(d.color);
+                        })
+                        .text(function (d) { return d.name; });
 
                 var force = d3.layout.force()
                         .charge(-120)
-                        .linkDistance(50)
+                        .linkDistance(200)
                         .nodes(nodes)
                         .links(links)
-                        .size([WIDTH, HEIGHT])
+                        .gravity(0.2)
+                        .size([width, height])
                         .start();
 
                 function tick() {
-                    /*
-                     link.attr("x1", function(d) { return d.source.x; })
-                     .attr("y1", function(d) { return d.source.y; })
-                     .attr("x2", function(d) { return d.target.x; })
-                     .attr("y2", function(d) { return d.target.y; }); */
                     link.attr("d", function (d) {
                         var dx = d.target.x - d.source.x,
                             dy = d.target.y - d.source.y,
-                            numOfLinks = totalLinks[d.source.id + "," + d.target.id] || totalLinks[d.target.id + "," + d.source.id],
-                            dr = Math.sqrt(dx * dx + dy * dy) / (1 + d.linkindex / numOfLinks);
+                            numOfLinks =
+                                totalLinks[
+                                    d.source.index + "," + d.target.index] ||
+                                totalLinks[
+                                    d.target.index + "," + d.source.index],
+                            dr = 0.8 * Math.sqrt(dx * dx + dy * dy) /
+                                (1 + d.linkindex / numOfLinks);
 
                         return "M" + d.source.x + "," + d.source.y +
-                            "A" + dr + "," + dr + " 0 0 1," + d.target.x + "," + d.target.y +
-                            "A" + dr + "," + dr + " 0 0 0," + d.source.x + "," + d.source.y;
+                            "A" + dr + "," + dr + " 0 0,1" +
+                            d.target.x + "," + d.target.y;
                     });
 
-                    node.attr('cx', function(d) { return d.x; })
-                        .attr('cy', function(d) { return d.y; });
-
-                    textnode
-                        .attr("x", function(d){ return d.x + 7; })
-                        .attr("y", function(d){ return d.y + 7; });
+                    node.attr('transform',
+                              function (d) { return svgTranslate(d.x, d.y); });
+                    
+                    textnode.attr('transform',
+                              function (d) { return svgTranslate(d.x, d.y); });
 
                     update();
                 };
@@ -981,45 +1082,51 @@ define(
                 force.on("tick", tick);
 
 
-                var center_view = function() {
-                    // Center the view on the molecule(s) and scale it so that everything
-                    // fits in the window
+                var center_view = function () {
+                    // Center the view on the molecule(s) and scale it so 
+                    // that everything fits in the window
 
                     //no molecules, nothing to do
                     if (nodes.length === 0) return;
 
                     // Get the bounding box
-                    var min_x, max_x, min_y, max_y;
-                    [min_x, max_x] = d3.extent(nodes.map(function(d) { return d.x; }));
-                    [min_y, max_y] = d3.extent(nodes.map(function(d) { return d.y; }));
+                    var min_x = d3.min(nodes.map(function (d) { return d.x; })),
+                        max_x = d3.max(nodes.map(function (d) { return d.x; })),
+                        min_y = d3.min(nodes.map(function (d) { return d.y; })),
+                        max_y = d3.max(nodes.map(function (d) { return d.y; }));
 
                     // The width and the height of the graph
-                    var mol_width = max_x - min_x;
-                    var mol_height = max_y - min_y;
+                    var mol_width = max_x - min_x,
+                        mol_height = max_y - min_y;
 
-                    // how much larger the drawing area is than the width and the height
-                    var width_ratio = WIDTH / mol_width;
-                    var height_ratio = HEIGHT / mol_height;
+                    // how much larger the drawing area is than the width and
+                    // the height
+                    var width_ratio = width / mol_width,
+                        height_ratio = height / mol_height;
 
-                    // we need to fit it in both directions, so we scale according to
-                    // the direction in which we need to shrink the most
-                    var min_ratio = Math.min(width_ratio, height_ratio) * 0.8;
+                    // we need to fit it in both directions, so we scale 
+                    // according to the direction in which we need to 
+                    // shrink the most
+                    var min_ratio = Math.min(width_ratio, height_ratio) * 0.6;
 
                     // the new dimensions of the molecule
-                    var new_mol_width = mol_width * min_ratio;
-                    var new_mol_height = mol_height * min_ratio;
+                    var new_mol_width = mol_width * min_ratio,
+                        new_mol_height = mol_height * min_ratio;
 
                     // translate so that it's in the center of the window
-                    var x_trans = -(min_x) * min_ratio + (WIDTH - new_mol_width) / 2;
-                    var y_trans = -(min_y) * min_ratio + (HEIGHT - new_mol_height) / 2;
+                    var x_trans = -(min_x) * min_ratio +
+                            (width - new_mol_width) / 2,
+                        y_trans = -(min_y) * min_ratio +
+                            (height - new_mol_height) / 2;
 
 
                     // do the actual moving
                     vis.attr("transform",
-                             svgTranslate(x_trans, y_trans) + " scale(" + min_ratio + ")");
+                             svgTranslate(x_trans, y_trans) +
+                                 " scale(" + min_ratio + ")");
 
-                    // tell the zoomer what we did so that next we zoom, it uses the
-                    // transformation we entered here
+                    // tell the zoomer what we did so that next we zoom,
+                    // it uses the transformation we entered here
                     zoomer.translate([x_trans, y_trans ]);
                     zoomer.scale(min_ratio);
                     update();
@@ -1027,35 +1134,36 @@ define(
 
                 function dragended(d) {
                     //d3.select(self).classed("dragging", false);
-                    node.filter(function(d) { return d.selected; })
-                        .each(function(d) { d.fixed &= ~6; });
+                    node.filter(function (d) { return d.selected; })
+                        .each(function (d) { d.fixed &= ~6; });
                     update();
                 }
 
                 function dragstarted(d) {
                     d3.event.sourceEvent.stopPropagation();
                     if (!d.selected && !shiftKey) {
-                        // if this node isn't selected, then we have to unselect every other node
-                        node.classed("selected", function(p) {
+                        // if this node isn't selected,
+                        // then we have to unselect every other node
+                        node.classed("selected", function (p) {
                             return p.selected = p.previouslySelected = false;
                         });
                     }
 
-                    d3.select(this).classed("selected", function(p) {
-                        d.previouslySelected = d.selected; return d.selected = true;
+                    d3.select(this).classed("selected", function (p) {
+                        d.previouslySelected = d.selected;
+                        return d.selected = true;
                     });
 
-                    node.filter(function(d) { return d.selected; })
-                        .each(function(d) { d.fixed |= 2; });
+                    node.filter(function (d) { return d.selected; })
+                        .each(function (d) { d.fixed |= 2; });
                     update();
                 }
 
                 function dragged(d) {
-                    node.filter(function(d) { return d.selected; })
-                        .each(function(d) {
+                    node.filter(function (d) { return d.selected; })
+                        .each(function (d) {
                             d.x += d3.event.dx;
                             d.y += d3.event.dy;
-
                             d.px += d3.event.dx;
                             d.py += d3.event.dy;
                         });
@@ -1083,7 +1191,8 @@ define(
                         vis.selectAll('g.gnode')
                             .on('mousedown.drag', null);
 
-                        brush.select('.background').style('cursor', 'crosshair');
+                        brush.select('.background').style(
+                            'cursor', 'crosshair');
                         brush.call(brusher);
                     }
                     update();
@@ -1104,7 +1213,12 @@ define(
                 }
 
                 function update() {
-                    link.style('stroke', '#999');
+                    canvas.selectAll('.link').style({
+                        'fill': 'none',
+                        'stroke': 'black',
+                        'stroke-opacity': '0.4',
+                        'stroke-width': 3
+                    });
                     node.style({
                         'stroke': '#fff',
                         'stroke-width': '1.5px'
@@ -1117,14 +1231,64 @@ define(
                         'stoke': '#fff',
                         'shape-rendering': 'crispEdges'
                     });
-                    canvas.selectAll('text').style('font-size', '10px');
+                    canvas.selectAll('text').style({
+                        'font-family': "sans-serif",
+                        'user-select': 'none',
+                        'cursor': 'default'
+                    });
+                    textlink.style({
+                        'font-size': '6px',
+                        'stroke-width': 0,
+                        'fill': 'red'
+                    });
                     textnode.style({
-                        'stroke': 'green',
+                        'font-size': '10px',
+                        'stroke-width': 0,
                         'fill': 'green'
                     });
+                    canvas.selectAll('.shadow').style({
+                        'stroke-width': "3px",
+                        'stroke-opacity': "0.9"
+                    })
+                    
+                    detached.selectAll('.divsvg').style({
+                        'outline': 'none'
+                    });
+                    
+                    canvas.selectAll('.active').style({
+                        'stroke-opacity': '1'
+                    });
+                    
+                    canvas.selectAll('.inactive').style({
+                        'stroke-opacity': '0.4'
+                    });
+                    
                 }
 
+                for(var i = 0; i < 100; ++i){ force.tick(); }
+                center_view();
+                
+                createSave(detached);
+                detached.append('button')
+                    .attr('class', 'd3btn')
+                    .text('Hide labels')
+                    .on('click', function () {
+                        if (hideLabels) {
+                            canvas.selectAll('.label').style({
+                                'opacity': '100'
+                            });
+                            d3.select(this).text('Hide labels');
+                        } else {
+                            canvas.selectAll('.label').style({
+                                'opacity': 0
+                            });
+                            d3.select(this).text('Show labels');
+                        }
+                        hideLabels = !hideLabels;
+                    });
+                    
                 callBigBang(runtime, detached);
+
             };
         }
 
@@ -1145,16 +1309,21 @@ define(
                     };
                 }
 
-                var tree = d3.layout.tree().size([HEIGHT, WIDTH]);
+                var margin = MARGIN,
+                    dimension = getDimension(margin),
+                    width = dimension.width,
+                    height = dimension.height;
+
+                var tree = d3.layout.tree().size([height, width]);
                 var diagonal = d3.svg.diagonal()
-                        .projection(function(d) { return [d.x, d.y]; });
+                        .projection(function (d) { return [d.x, d.y]; });
 
                 var root = parseTree(rootNode);
 
                 var detached = createDiv();
-                var canvas = createCanvas(WIDTH, HEIGHT, detached, "top-left");
+                var canvas = createCanvas(detached, margin, "top-left");
 
-                root.x0 = HEIGHT / 2;
+                root.x0 = height / 2;
                 root.y0 = 0;
 
                 var i = 0, duration = 750;
@@ -1176,42 +1345,44 @@ define(
                         links = tree.links(nodes);
 
                     // Normalize for fixed-depth.
-                    nodes.forEach(function(d) { d.y = d.depth * 40; });
+                    nodes.forEach(function (d) { d.y = d.depth * 40; });
 
                     // Update the
                     var node = canvas.selectAll("g.node")
-                            .data(nodes, function(d) { return d.id || (d.id = ++i); });
+                            .data(nodes, function (d) {
+                                return d.id || (d.id = ++i);
+                            });
 
                     // Enter any new nodes at the parent's previous position.
                     var nodeEnter = node.enter().append("g")
                             .attr("class", "node")
-                            .attr("transform", function(d) {
+                            .attr("transform", function (d) {
                                 return svgTranslate(source.x0, source.y0);
                             })
                             .on("click", click);
 
                     nodeEnter.append("circle")
                         .attr("r", 1e-6)
-                        .style("fill", function(d) {
+                        .style("fill", function (d) {
                             return d._children ? "lightsteelblue" : "#fff";
                         });
 
                     nodeEnter.append("text")
                         .attr("dy", ".35em")
                         .attr("text-anchor", "middle")
-                        .text(function(d) { return d.name; })
+                        .text(function (d) { return d.name; })
                         .style("fill-opacity", 1e-6);
 
                     // Transition nodes to their new position.
                     var nodeUpdate = node.transition()
                             .duration(duration)
-                            .attr("transform", function(d) {
+                            .attr("transform", function (d) {
                                 return svgTranslate(d.x, d.y);
                             });
 
                     nodeUpdate.select("circle")
                         .attr("r", 10)
-                        .style("fill", function(d) {
+                        .style("fill", function (d) {
                             return d._children ? "lightsteelblue" : "#fff";
                         });
 
@@ -1221,7 +1392,7 @@ define(
                     // Transition exiting nodes to the parent's new position.
                     var nodeExit = node.exit().transition()
                             .duration(duration)
-                            .attr("transform", function(d) {
+                            .attr("transform", function (d) {
                                 return svgTranslate(source.y, source.x);
                             })
                             .remove();
@@ -1234,12 +1405,12 @@ define(
                     // Update the links
 
                     var link = canvas.selectAll("path.link")
-                            .data(links, function(d) { return d.target.id; });
+                            .data(links, function (d) { return d.target.id; });
 
                     // Enter any new links at the parent's previous position.
                     link.enter().insert("path", "g")
                         .attr("class", "link")
-                        .attr("d", function(d) {
+                        .attr("d", function (d) {
                             var o = {x: source.x0, y: source.y0};
                             return diagonal({source: o, target: o});
                         });
@@ -1252,14 +1423,14 @@ define(
                     // Transition exiting nodes to the parent's new position.
                     link.exit().transition()
                         .duration(duration)
-                        .attr("d", function(d) {
+                        .attr("d", function (d) {
                             var o = {x: source.x, y: source.y};
                             return diagonal({source: o, target: o});
                         })
                         .remove();
 
                     // Stash the old positions for transition.
-                    nodes.forEach(function(d) {
+                    nodes.forEach(function (d) {
                         d.x0 = d.x;
                         d.y0 = d.y;
                     });
@@ -1291,46 +1462,131 @@ define(
         }
 
         function genericPlot(runtime, image) {
-            return function (lst, xMin, xMax, yMin, yMax, label) {
-                runtime.checkArity(6, arguments, "generic-plot");
+            return function (lst, xMin, xMax, yMin, yMax,
+                             colorInfo, label, allID) {
+                runtime.checkArity(8, arguments, "generic-plot");
                 runtime.checkList(lst);
                 runtime.checkNumber(xMin);
                 runtime.checkNumber(xMax);
                 runtime.checkNumber(yMin);
                 runtime.checkNumber(yMax);
+                runtime.checkList(colorInfo);
                 runtime.checkString(label);
+                runtime.checkNumber(allID);
                 if (jsnums.greaterThanOrEqual(xMin, xMax) ||
                     jsnums.greaterThanOrEqual(yMin, yMax)) {
                     runtime.throwMessageException(CError.RANGE);
                 }
 
+                var margin = MARGIN,
+                    dimension = getDimension(margin),
+                    width = dimension.width,
+                    height = dimension.height;
+                    
                 var detached = createDiv();
-                var canvas = createCanvas(WIDTH, HEIGHT, detached, "top-left");
-                appendAxis(xMin, xMax, yMin, yMax, WIDTH, HEIGHT, canvas);
+                var canvas = createCanvas(detached, margin, "top-left");
+                appendAxis(xMin, xMax, yMin, yMax, width, height, canvas);
 
-                var colorConverter = convertColor(image);
+                var colorConverter = convertColor(runtime, image);
 
                 var plots = runtime.ffi.toArray(lst).map(
                     function (e) {
                         return {
                             'points': parsePoints(
                                 runtime.getField(e, "points"), runtime),
-                            'color': colorConverter(runtime.getField(e, "color")),
+                            'id': runtime.getField(e, "id"),
                             'type': e["$name"]
                         };
                     }
                 );
+                
+                var colors = runtime.ffi.toArray(colorInfo).map(
+                    function (e) { return colorConverter(e); }
+                );
+                
+                var xToPixel = libNum.scaler(xMin, xMax, 0, width - 1, true),
+                    yToPixel = libNum.scaler(yMin, yMax, height - 1, 0, true);
+                
+                function plotLine(
+                    dataPoints, id, xMin, xMax, yMin, yMax,
+                    width, height, canvas) {
+                    /*
+                     * Graph a line
+                     *
+                     * Part of this function is adapted from
+                     * http://jsfiddle.net/christopheviau/Hwpe3/
+                     */
 
-                plots.forEach(function(e, id) {
-                    if (e.type === "line-plot") {
-                        plotLine(e.points, id, xMin, xMax, yMin, yMax,
-                                 WIDTH, HEIGHT, e.color, canvas);
-                    } else if (e.type == "scatter-plot") {
-                        plotPoints(e.points, id, xMin, xMax, yMin, yMax,
-                                   WIDTH, HEIGHT, e.color, canvas, detached);
+                    var line = d3.svg.line()
+                            .x(function (d) { return xToPixel(d.x); })
+                            .y(function (d) { return yToPixel(d.y); });
+
+                    canvas.append("path")
+                        .attr("class", "plotting" + id.toString())
+                        .attr("d", line(dataPoints));
+                }
+                
+                function plotPoints(
+                    dataPoints, id, xMin, xMax, yMin, yMax,
+                    width, height, color, canvas, detached) {
+                    /*
+                     * Plot data points (scatter plot)
+                     *
+                     * Part of this function is adapted from
+                     * http://alignedleft.com/tutorials/d3/making-a-scatterplot
+                     */
+
+                    var xToPixel = libNum.scaler(xMin, xMax, 0, width - 1, true),
+                        yToPixel = libNum.scaler(yMin, yMax, height - 1, 0, true);
+
+                    var tip = d3tip(detached)
+                            .attr('class', 'd3-tip')
+                            .direction('e')
+                            .offset([0, 20])
+                            .html(function (d) {
+                                var x = libNum.format(d.x, 6);
+                                var y = libNum.format(d.y, 6);
+                                return "x: " + x.toString() + "<br />" +
+                                    "y: " + y.toString() + "<br />";
+                            });
+
+                    canvas.call(tip);
+
+                    canvas.selectAll("circle")
+                        .data(dataPoints)
+                        .enter()
+                        .append("circle")
+                        .attr("class", "scatter-plot" + id.toString())
+                        .attr("cx", function (d) { return xToPixel(d.x); })
+                        .attr("cy", function (d) { return yToPixel(d.y); })
+                        .attr("r", 2)
+                        .on("mouseover", tip.show)
+                        .on("mouseout", tip.hide);
+
+                    stylizeTip(detached);
+                }
+                
+                plots.forEach(function (e) {
+                    if (e.type === "line-plot-int") {
+                        plotLine(e.points, e.id, xMin, xMax, yMin, yMax,
+                                 width, height, canvas);
+                    } else if (e.type == "scatter-plot-int") {
+                        plotPoints(e.points, e.id, xMin, xMax, yMin, yMax,
+                                   width, height, canvas, detached);
+                    } else {
+                        throw "plot model not supported";
                     }
                 });
-                putLabel(label, WIDTH, HEIGHT, detached);
+                
+                
+                fill(allID, 0).forEach(function (e, i) {
+                    canvas.selectAll('.plotting' + i.toString()).style(
+                        {'stroke': colors[i], 'stroke-width': 1, 'fill': 'none'});
+                    canvas.selectAll('.scatter-plot' + i.toString()).style(
+                        'fill', colors[i]);
+                });
+                    
+                putLabel(label, width, height, detached, margin);
                 createSave(detached);
                 callBigBang(runtime, detached);
             };
@@ -1402,8 +1658,13 @@ define(
             };
         }
 
+        function test(runtime, sd) {
+            return function () {
+            };
+        }
+        
         function generateXY(runtime) {
-            return function(f, xMin, xMax, yMin, yMax) {
+            return function (f, xMin, xMax, yMin, yMax) {
                 runtime.checkArity(5, arguments, "generate-xy");
                 runtime.checkFunction(f);
                 runtime.checkNumber(xMin);
@@ -1411,126 +1672,137 @@ define(
                 runtime.checkNumber(yMin);
                 runtime.checkNumber(yMax);
 
-                // Produces "rough" data points to be used for plotting
-                // It is rough because it assumes that f is continuous
-                var width = WIDTH,
-                    height = HEIGHT;
+                var margin = MARGIN,
+                    dimension = getDimension(margin),
+                    width = dimension.width,
+                    height = dimension.height,
+                    K = 500,
+                    DELTA = 0.01;
 
-                var inputScaler = libNum.scaler(0, width - 1, xMin, xMax, false),
-                    outputScaler = libNum.scaler(yMin, yMax, height - 1, 0, false);
+                var inputScaler = libNum.scaler(
+                        0, width - 1, xMin, xMax, false),
+            
+                    outputScaler = libNum.scaler(
+                        yMin, yMax, height - 1, 0, false);
+                
+                var xToPixel = libNum.scaler(xMin, xMax, 0, width - 1, true);
+                var yToPixel = libNum.scaler(yMin, yMax, height - 1, 0, true);
 
-                function addPoint(dataPoints, i) {
-                    // Consumes old data points and produces a new data points
-                    // which one point is added
-                    var x = inputScaler(i), y;
-                    var groupedPoints = lastElement(dataPoints);
+                function PointCoord(x) {
+                    this.x = x;
+                    this.px = xToPixel(x);
                     try {
-                        // prevent Pyret's division by zero
-                        y = f.app(x);
-                        // y could be a complex number, which could not be
-                        // converted to a fixnum
-                        if (Number.isNaN(jsnums.toFixnum(y))) {
-                            dataPoints.push([]);
-                            return dataPoints;
+                        this.y = f.app(x);
+                        
+                        // to test complex number in the same time as well
+                        // TODO change to more elegant way
+                        if (jsnums.lessThan(this.y, yMin) ||
+                            jsnums.lessThan(yMax, this.y)) { 
+                                
+                            this.y = NaN;
+                            this.py = NaN;
+                        } else {
+                            this.py = yToPixel(this.y);
                         }
-                    } catch (e) {
-                        dataPoints.push([]);
-                        return dataPoints;
+                    } catch(e) {
+                        this.y = NaN;
+                        this.py = NaN;
                     }
-
-                    var possibleY = libNum.adjustInRange(y, yMin, yMax);
-
-                    groupedPoints.push({
-                        'x': i,
-                        'y': jsnums.toFixnum(outputScaler(possibleY)),
-                        'realx': x,
-                        'realy': y
-                    });
-                    if (possibleY !== y) {
-                        dataPoints.push([]);
-                    }
-                    return dataPoints;
+                    return this;
+                }
+        
+                function isSamePX(coordA, coordB) {
+                    return Math.floor(coordA.px) == Math.floor(coordB.px);
                 }
 
-                function getList(range) {
-                    return range
-                        .reduce(addPoint, [[]])
-                        .filter(function (d) { return d.length > 1; });
+                function closeEnough(coordA, coordB) {
+                    return ((Math.abs(coordA.py - coordB.py) <= 1) && 
+                            (coordB.px - coordA.px <= 1));
                 }
-
-                var forwardList = getList(d3.range(width));
-                var backwardList = getList(d3.range(width).reverse())
-                        .map(function (d) { return d.reverse(); }).reverse();
-
-                function getInterval(lst) {
-                    return lst.map(function (sublist) {
-                        return {
-                            'left': sublist[0].x,
-                            'right': lastElement(sublist).x,
-                            'arr': sublist
-                        };
-                    });
-                }
-
-                var forwardInterval = getInterval(forwardList);
-                var backwardInterval = getInterval(backwardList);
-
-                var interval = forwardInterval.concat(backwardInterval)
-                        .sort(function (a, b) { return a.left - b.left; });
-
-                function isIntersectInterval(a, b) {
-                    var left = Math.max(a.left, b.left);
-                    var right = Math.min(a.right, b.right);
-                    return left <= right;
-                }
-
-                function mergeInterval(a, b) {
-                    return {
-                        'left': a.left,
-                        'right': b.right,
-                        'arr': a.arr.concat(b.arr)
-                    };
-                }
-
-                function answer() {
-                    if (interval.length > 0) {
-                        var firstValue = interval.shift();
-                        return interval.reduce(
-                            function (dataPoints, val) {
-                                var prevValue = dataPoints.pop();
-                                if (isIntersectInterval(prevValue, val)) {
-                                    dataPoints.push(mergeInterval(prevValue, val));
-                                } else {
-                                    dataPoints.push(prevValue);
-                                    dataPoints.push(val);
-                                }
-                                return dataPoints;
-                            }, [firstValue])
-                            .map(function (d) {
-                                d.arr.sort(function (a, b) {
-                                    return a.x - b.x;
-                                });
-                                return d.arr;
-                            });
+        
+                function tooClose(coordA, coordB) {
+                    if (jsnums.approxEquals(coordA.px, coordB.px, DELTA)) {
+                        return true;
                     } else {
-                        return [];
+                        return false;
                     }
                 }
-                var ans = answer()
-                        .map(function (lst) {
+                
+                function allInvalid(points) {
+                    return points.every(function (v) {
+                        return Number.isNaN(v.py);
+                    });
+                }
+
+                // bplot([list: xy-plot(_ + 1, I.red)], -10, 10, -10, 10, "abc")
+                // bplot([list: xy-plot(1 / _, I.red)], -10, 10, -10, 10, "abc")
+                function divideSubinterval(left, right) {
+                    /*
+                    Input: two X values
+                    Output: list of [2-length long list of points]
+                    Note: invalid for two ends is still okay
+                    invalid for K points indicate that it should not be plotted!
+                    */
+                    
+                    if (closeEnough(left, right)) {
+                        return [[left, right]];
+                    } else if (tooClose(left, right)) {
+                        return [];
+                    } else {
+                        var scalerSubinterval = libNum.scaler(
+                            0, K, left.x, right.x, false);
+
+                        var points = fill(K, 0).map(function (v, i) {
+                            return new PointCoord(scalerSubinterval(i));
+                        });
+                        
+                        if (allInvalid(points)) {
+                            return [];
+                        } else {
+                            var intervals = fill(K - 1, 0).map(function (v, i) {
+                                return divideSubinterval(
+                                    points[i], points[i + 1]);
+                            });
+                            intervals = [].concat.apply([], intervals);
+                            return intervals.reduce(
+                                function(dataPoints, val) {
+                                    if (dataPoints.length > 0) {
+                                        var prev = dataPoints.pop();
+                                        if (prev.length > 0 && val.length > 0) {
+                                            if (closeEnough(
+                                                lastElement(prev), val[0])) {
+                                                val.shift();
+                                                dataPoints.push(
+                                                    prev.concat(val));
+                                            } else {
+                                                dataPoints.push(prev);
+                                                dataPoints.push(val);
+                                            }
+                                        } else {
+                                            dataPoints.push(prev);
+                                            dataPoints.push(val);
+                                        }
+                                    } else {
+                                        dataPoints.push(val);
+                                    }
+                                    return dataPoints;
+                            }, []);
+                        }
+                    }
+                }
+        
+                var ans = divideSubinterval(new PointCoord(xMin),
+                                            new PointCoord(xMax))
+                ans = ans.map(
+                    function (lst) {
                             return lst.map(function (dp) {
                                 return runtime.makeObject({
-                                    'x': dp.realx,
-                                    'y': dp.realy
+                                    'x': dp.x,
+                                    'y': dp.y
                                 });
                             });
                         }).map(runtime.ffi.makeList);
                 return runtime.ffi.makeList(ans);
-            };
-        }
-
-        function test(runtime, sd) {
-            return function () {
             };
         }
 
