@@ -229,7 +229,7 @@ var CError = {
 };
 
 define(
-    ["d3", "d3tip", "js/js-numbers", "my-project/libJS", "my-project/libNum"],
+    ["d3", "my-project/customized-d3-tip", "js/js-numbers", "my-project/libJS", "my-project/libNum"],
     function (d3, d3tip, jsnums, libJS, libNum) {
         function createDiv() {
             /*
@@ -1757,8 +1757,10 @@ define(
                 }
                 
                 function allInvalid(points) {
-                    return points.every(function (v) {
-                        return Number.isNaN(v.py);
+                    // consider all invalid if there is no (i, i+1) which are both valid
+                    return range(0, points.length - 1).every(function (i) {
+                        return Number.isNaN(points[i].py) ||
+                               Number.isNaN(points[i + 1].py);
                     });
                 }
                 
@@ -1779,6 +1781,7 @@ define(
                 // bplot([list: xy-plot(_ + 1, I.red)], -10, 10, -10, 10, "abc")
                 // bplot([list: xy-plot(1 / _, I.red)], -10, 10, -10, 10, "abc")
                 // bplot([list: xy-plot(lam(x): num-sin(1 / x) end, I.red)], -10, 10, -10, 10, "abc")
+                    
                 function divideSubinterval(left, right) {
                     /*
                     Input: two X values
@@ -1808,14 +1811,16 @@ define(
                         if (allInvalid(points)) {
                             return [];
                         } else {
-                            var skip = false;
                             var intervals = [];
                             var shuffled = shuffle(range(0, K - 1));
                             for (var i = 0; i < K - 1; i++) {
                                 var v = shuffled[i];
-                                intervals.push(divideSubinterval(
-                                    points[v], points[v + 1]
-                                ));
+                                if (!(Number.isNaN(points[v].py) &&
+                                      Number.isNaN(points[v + 1].py))) {
+                                    intervals.push(divideSubinterval(
+                                        points[v], points[v + 1]
+                                    ));
+                                }
                                 if (isSamePX(left, right) && 
                                     isAllOccupied(left, right)) {
                                         return [[left, right]];
