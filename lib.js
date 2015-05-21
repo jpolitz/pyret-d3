@@ -130,17 +130,15 @@ function FenwickTree(n) {
     };
 }
 
-/*
- var testFenwick = new FenwickTree(10);
- testFenwick.add(1, 2);
- assert(testFenwick.sumInterval(1, 10) === 2);
- testFenwick.add(1, 3);
- assert(testFenwick.sumInterval(1, 10) === 5);
- testFenwick.add(3, 4);
- assert(testFenwick.sumInterval(1, 10) === 9);
- assert(testFenwick.sumInterval(1, 2) === 5);
- assert(testFenwick.sumInterval(2, 3) === 4);
- */
+var testFenwick = new FenwickTree(10);
+testFenwick.add(1, 2);
+assert(testFenwick.sumInterval(1, 10) === 2);
+testFenwick.add(1, 3);
+assert(testFenwick.sumInterval(1, 10) === 5);
+testFenwick.add(3, 4);
+assert(testFenwick.sumInterval(1, 10) === 9);
+assert(testFenwick.sumInterval(1, 2) === 5);
+assert(testFenwick.sumInterval(2, 3) === 4);
 
 function LogTable(n) {
     /*
@@ -187,16 +185,16 @@ function LogTable(n) {
     };
 }
 
-function convertColor(runtime, image) {
-    function p(pred, name) {
-        return function (val) {
-            runtime.makeCheckType(pred, name)(val);
-            return val;
-        };
+function p(pred, name, runtime) {
+    return function(val) {
+        runtime.makeCheckType(pred, name)(val);
+        return val;
     }
-    
+}
+
+function convertColor(runtime, image) {
     var colorDb = image.colorDb,
-        _checkColor = p(image.isColorOrColorString, "Color");
+        _checkColor = p(image.isColorOrColorString, "Color", runtime);
 
     function checkColor(val) {
         var aColor = _checkColor(val);
@@ -223,13 +221,21 @@ function getDimension(margin) {
     };
 }
 
+function checkListGenerator(type, _checker, runtime) {
+    // TODO: this will eventually not work
+    var checker = function(x){ return p(_checker, type, runtime)(x); }
+    return p(function(val) {
+        return runtime.ffi.makeList(runtime.ffi.toArray(val).map(checker));
+    }, "List<" + type + ">", runtime);
+}
+
 var CError = {
     "RANGE": "x-min and y-min must be strictly less than " +
         "x-max and y-max respectively."
 };
 
 define(
-    ["d3", "my-project/customized-d3-tip", "js/js-numbers", "my-project/libJS", "my-project/libNum"],
+    ["d3", "d3tip", "js/js-numbers", "my-project/libJS", "my-project/libNum"],
     function (d3, d3tip, jsnums, libJS, libNum) {
         function createDiv() {
             /*
@@ -268,7 +274,7 @@ define(
                 canvas.attr("transform",
                     svgTranslate(ALLWIDTH / 2, ALLHEIGHT / 2));
             } else {
-                throw "orient '" + orient  + "' not implemented"; // internal error
+                throw "orient '" + orient  + "' not implemented";
             }
             return canvas;
         }
@@ -282,12 +288,16 @@ define(
         function callBigBang(runtime, detached) {
             postStyle(detached);
             runtime.getParam("current-animation-port")(detached.node());
+            
+            // TODO: below is a hack. Actually Pyret is supposed to take 
+            // care of it (https://github.com/brownplt/pyret-lang/issues/483)
+            // Remove this when the bug is fixed
             var terminate = function () {  d3.selectAll(".maind3").remove(); };
             
             // simulate dialogclose
             d3.selectAll(".ui-dialog-titlebar-close").on("click", terminate);
             d3.select("body").on("keyup", function(e) {
-                if (d3.event.keyCode == 27) { terminate(); } // esc
+                if (d3.event.keyCode == 27) { terminate(); } // esc key
             });
         }
 
@@ -378,17 +388,17 @@ define(
                 yAxisConf = getAxisConf(xMin, xMax);
             xAxisConf.pos = 1 - xAxisConf.pos;
 
-            var tickNum = 6; // TODO: why 6, not 7?
+            var tickNum = 7;
             
             var xAxisScaler = d3.scale.linear()
-                    .domain([0, tickNum]).range([0, width - 1]),
+                    .domain([0, tickNum - 1]).range([0, width - 1]),
                 yAxisScaler = d3.scale.linear()
-                    .domain([0, tickNum]).range([height - 1, 0]);
+                    .domain([0, tickNum - 1]).range([height - 1, 0]);
                     
-            var allValues = d3.range(0, tickNum + 1);
+            var allValues = d3.range(0, tickNum);
 
-            var xAxisDisplayScaler = libNum.scaler(0, tickNum, xMin, xMax),
-                yAxisDisplayScaler = libNum.scaler(0, tickNum, yMin, yMax);
+            var xAxisDisplayScaler = libNum.scaler(0, tickNum - 1, xMin, xMax),
+                yAxisDisplayScaler = libNum.scaler(0, tickNum - 1, yMin, yMax);
 
             var xAxis = d3.svg.axis().scale(xAxisScaler)
                     .orient((xAxisConf.pos === 0) ? "top" : "bottom")
@@ -570,6 +580,7 @@ define(
                  * @param (string) xml
                  * @return (nothing)
                  */
+                runtime.checkArity(1, arguments, "show-svg");
                 runtime.checkString(xml);
                 runtime.getParam("current-animation-port")(xml);
             };
@@ -577,6 +588,8 @@ define(
 
         function getBBox(runtime) {
             return function (xml) {
+                runtime.checkArity(1, arguments, "getBBox");
+                runtime.checkString(xml);
                 var parser = new DOMParser();
                 var svg = parser.parseFromString(
                     xml, "image/svg+xml").documentElement;
@@ -595,6 +608,10 @@ define(
                 runtime.checkArity(2, arguments, "histogram-plot");
                 runtime.checkList(lst);
                 runtime.checkNumber(n);
+                
+                var checkListofNumber = checkListGenerator(
+                    "Number", runtime.isNumber, runtime);
+                checkListofNumber(lst);
 
                 if ((!jsnums.isInteger(n)) ||
                     (n < 1) ||
@@ -603,7 +620,7 @@ define(
                         "n must be an interger between 1 and " +
                             HISTOGRAMN.toString());
                 }
-
+                
                 var data = runtime.ffi.toArray(lst);
 
                 if (data.length === 0) {
@@ -658,6 +675,8 @@ define(
                 };
 
                 checkISD(sdValue);
+                // TODO: check if all are numbers
+                // Pyret currently doesn't have a good way to check this
 
                 var keys = runtime.ffi.toArray(
                     runtime.getField(sdValue, "keys-list").app());
@@ -769,9 +788,11 @@ define(
             return function (rawGraph) {
                 runtime.checkArity(1, arguments, "force-layout");
                 runtime.checkObject(rawGraph);
+                // TODO: use brander to check if it is a graph. (how?)
                 
                 var isDirected;
                 
+                // TODO: is below a correct way to check type of Graph?
                 if (rawGraph['$name'] == "undirected-graph") {
                     isDirected = false;
                 } else if (rawGraph['$name'] == "directed-graph") {
@@ -839,8 +860,8 @@ define(
 
                         links[i].linkindex = links[i - 1].linkindex + 1;
                     }
-                    totalLinks[links[i].source.index + ',' + links[i].target.index] =
-                        links[i].linkindex + 1;
+                    var combinedName = links[i].source.index + ',' + links[i].target.index;
+                    totalLinks[combinedName] = links[i].linkindex + 1;
                 });
 
                 var detached = createDiv();
@@ -928,7 +949,6 @@ define(
                 vis.attr('opacity', 0.4)
                     .attr('id', 'vis');
 
-
                 brush.call(brusher)
                     .on("mousedown.brush", null)
                     .on("touchstart.brush", null)
@@ -950,7 +970,23 @@ define(
                     .attr("orient", "auto")
                     .append("path")
                     .attr("d", "M0,-5L10,0L0,5");
+                    
+                var tipVertex = d3tip(detached)
+                        .attr('class', 'd3-tip')
+                        .direction('e')
+                        .offset([0, 20])
+                        .html(function (d) { return d.name; });
+                    
+                var tipEdge = d3tip(detached)
+                        .attr('class', 'd3-tip')
+                        .direction('e')
+                        .offset([0, 20])
+                        .html(function (d) { return d.label; });
 
+                canvas.call(tipVertex);
+                canvas.call(tipEdge);
+
+                // TODO: css is ugly
                 var link = vis.append("g")
                         .attr("class", "link")
                         .selectAll("path")
@@ -966,6 +1002,7 @@ define(
                             d3.select('#arrow_' + idEdge(d)).classed(aClass);
                             d3.select('#text_' + idEdge(d)).classed(aClass);
                             update();
+                            tipEdge.show(d);
                         })
                         .on('mouseout', function(d) {
                             var aClass = {
@@ -976,8 +1013,11 @@ define(
                             d3.select('#arrow_' + idEdge(d)).classed(aClass);
                             d3.select('#text_' + idEdge(d)).classed(aClass);
                             update();
-                        });
+                            tipEdge.hide(d);
+                        })
+                        .on('mousedown', tipEdge.hide);
                     
+                // TODO: this is ugly somehow
                 if (isDirected) {
                     link = link.attr("marker-end", function(d) {
                         return "url(#arrow_" + idEdge(d) + ")";
@@ -1002,9 +1042,9 @@ define(
                                 //if the shift key isn't down, 
                                 // unselect everything
                                 canvas.selectAll(".selected").classed(
-                                    'selected', function (p) {
-                                        p.selected = false;
-                                        p.previouslySelected = false;
+                                    'selected', function (k) {
+                                        k.selected = false;
+                                        k.previouslySelected = false;
                                         return false;
                                     });
                             }
@@ -1016,6 +1056,9 @@ define(
                         .on("mouseup", function (d) {
                             //if (d.selected && shiftKey) d3.select(this).classed("selected", d.selected = false);
                         })
+                        .on("mouseover", tipVertex.show)
+                        .on("mouseout", tipVertex.hide)
+                        .on("mousedown", tipVertex.hide)
                         .call(d3.behavior.drag()
                               .on("dragstart", dragstarted)
                               .on("drag", dragged)
@@ -1164,12 +1207,12 @@ define(
                     if (!d.selected && !shiftKey) {
                         // if this node isn't selected,
                         // then we have to unselect every other node
-                        node.classed("selected", function (p) {
-                            return p.selected = p.previouslySelected = false;
+                        node.classed("selected", function (k) {
+                            return k.selected = k.previouslySelected = false;
                         });
                     }
 
-                    d3.select(this).classed("selected", function (p) {
+                    d3.select(this).classed("selected", function () {
                         d.previouslySelected = d.selected;
                         return d.selected = true;
                     });
@@ -1283,6 +1326,7 @@ define(
                         'stroke-opacity': '0.4'
                     });
                     
+                    stylizeTip(detached);
                 }
 
                 for(var i = 0; i < 100; ++i){ force.tick(); }
@@ -1320,6 +1364,8 @@ define(
             return function (rootNode) {
                 runtime.checkArity(1, arguments, "tree-diagram");
                 runtime.checkObject(rootNode);
+                
+                // TODO: use brander to check if it is a tree-diagram. (how?)
 
                 function parseTree(node) {
                     return {
@@ -1382,10 +1428,15 @@ define(
                             .on("click", click);
 
                     nodeEnter.append("circle")
+                        .attr('class', 'circlemain')
                         .attr("r", 1e-6)
                         .style("fill", function (d) {
                             return d._children ? "lightsteelblue" : "#fff";
                         });
+                    
+                    nodeEnter.append("circle")
+                        .attr('class', 'circleminor')
+                        .attr('r', 1e-6)
 
                     nodeEnter.append("text")
                         .attr("dy", ".35em")
@@ -1400,11 +1451,18 @@ define(
                                 return svgTranslate(d.x, d.y);
                             });
 
-                    nodeUpdate.select("circle")
+                    nodeUpdate.select(".circlemain")
                         .attr("r", 10)
                         .style("fill", function (d) {
                             return d._children ? "lightsteelblue" : "#fff";
                         });
+                    
+                    nodeUpdate.select(".circleminor")
+                        .attr('r', function(d) {
+                            return d._children ? 4 : 1e-6
+                        })
+                        .attr('cy', 15)
+                        
 
                     nodeUpdate.select("text")
                         .style("fill-opacity", 1);
@@ -1548,16 +1606,13 @@ define(
                 
                 function plotPoints(
                     dataPoints, id, xMin, xMax, yMin, yMax,
-                    width, height, color, canvas, detached) {
+                    width, height, canvas, detached) {
                     /*
                      * Plot data points (scatter plot)
                      *
                      * Part of this function is adapted from
                      * http://alignedleft.com/tutorials/d3/making-a-scatterplot
                      */
-
-                    var xToPixel = libNum.scaler(xMin, xMax, 0, width - 1, true),
-                        yToPixel = libNum.scaler(yMin, yMax, height - 1, 0, true);
 
                     var tip = d3tip(detached)
                             .attr('class', 'd3-tip')
@@ -1619,11 +1674,13 @@ define(
             return function (lst) {
                 runtime.checkArity(1, arguments, "infer-bounds");
                 runtime.checkList(lst);
+                
+                // TODO: check if all are Graph
                 var dataPoints = flatten(runtime.ffi.toArray(lst).map(
-                    function (p) {
-                        if (runtime.hasField(p, "points")) {
+                    function (pts) {
+                        if (runtime.hasField(pts, "points")) {
                             return parsePoints(
-                                runtime.getField(p, "points"), runtime);
+                                runtime.getField(pts, "points"), runtime);
                         } else {
                             return [];
                         }
@@ -1680,15 +1737,9 @@ define(
                 });
             };
         }
-
-        function test(runtime, sd) {
-            return function () {
-            };
-        }
         
         function generateXY(runtime) {
             return function (f, xMin, xMax, yMin, yMax) {
-                var startTime = new Date();
                 runtime.checkArity(5, arguments, "generate-xy");
                 runtime.checkFunction(f);
                 runtime.checkNumber(xMin);
@@ -1704,7 +1755,7 @@ define(
                     dimension = getDimension(margin),
                     width = dimension.width,
                     height = dimension.height,
-                    K = 500,
+                    K = 70,
                     DELTA = 0.001;
 
                 var inputScaler = libNum.scaler(
@@ -1719,14 +1770,33 @@ define(
                 function PointCoord(x) {
                     this.x = x;
                     this.px = xToPixel(x);
+                    
+                    // TODO: this will break!
+                    // use execThunk
+                    // safeCall
+                    
+                    /*
+                    runtime.safeCall(function(){
+                        return runtime.execThunk(function(){
+                            return f.app(x);
+                        });
+                    }, function(answer){
+                        if(runtime.isSuccessResult(answer)){
+                            answer.result
+                        }else{
+                            answer.exn
+                        }
+                    });
+                    */
+                    
                     try {
                         this.y = f.app(x);
                         
-                        // to test complex number in the same time as well
-                        // TODO change to more elegant way
+                        // below will cause an exception
+                        // if y is a complex number
+                        
                         if (jsnums.lessThan(this.y, yMin) ||
-                            jsnums.lessThan(yMax, this.y)) { 
-                                
+                            jsnums.lessThan(yMax, this.y)) {         
                             this.y = NaN;
                             this.py = NaN;
                         } else {
@@ -1777,12 +1847,8 @@ define(
                     return logtable[Math.floor(left.px)].isRangedOccupied(
                         Math.floor(left.py), Math.floor(right.py));
                 }
-
-                // bplot([list: xy-plot(_ + 1, I.red)], -10, 10, -10, 10, "abc")
-                // bplot([list: xy-plot(1 / _, I.red)], -10, 10, -10, 10, "abc")
-                // bplot([list: xy-plot(lam(x): num-sin(1 / x) end, I.red)], -10, 10, -10, 10, "abc")
                     
-                function divideSubinterval(left, right) {
+                function divideSubinterval(left, right, depth) {
                     /*
                     Input: two X values
                     Output: list of [2-length long list of points]
@@ -1802,7 +1868,7 @@ define(
                             return [[left, right]];
                     } else {
                         var scalerSubinterval = libNum.scaler(
-                            0, K, left.x, right.x, false);
+                            0, K - 1, left.x, right.x, false);
 
                         var points = range(0, K).map(function (i) {
                             return new PointCoord(scalerSubinterval(i));
@@ -1815,12 +1881,9 @@ define(
                             var shuffled = shuffle(range(0, K - 1));
                             for (var i = 0; i < K - 1; i++) {
                                 var v = shuffled[i];
-                                if (!(Number.isNaN(points[v].py) &&
-                                      Number.isNaN(points[v + 1].py))) {
-                                    intervals.push(divideSubinterval(
-                                        points[v], points[v + 1]
-                                    ));
-                                }
+                                intervals.push(divideSubinterval(
+                                    points[v], points[v + 1], depth + 1
+                                ));
                                 if (isSamePX(left, right) && 
                                     isAllOccupied(left, right)) {
                                         return [[left, right]];
@@ -1832,7 +1895,7 @@ define(
                 }
         
                 var ans = divideSubinterval(new PointCoord(xMin),
-                                            new PointCoord(xMax))
+                                            new PointCoord(xMax), 0)
                 
                 ans.sort(function(a, b) {
                     if (a[0].px == b[0].px) {
@@ -1865,8 +1928,6 @@ define(
                         return dataPoints;
                 }, []);
                 
-                console.log('length', ans.length);
-                
                 ans = ans.map(
                     function (lst) {
                             return lst.map(function (dp) {
@@ -1876,11 +1937,18 @@ define(
                                 });
                             });
                         }).map(runtime.ffi.makeList);
-                var endTime = new Date();
-                var timeDiff = endTime - startTime;
-                timeDiff /= 1000;
-                console.log(timeDiff);
                 return runtime.ffi.makeList(ans);
+            };
+        }
+        
+        function test(runtime, sd) {
+            return function (L) {
+                runtime.checkArity(1, arguments, "test");
+                runtime.checkList(L);
+                var l = runtime.ffi.toArray(L);
+                l.forEach(function(e){
+                    runtime.checkNumber(e);
+                });
             };
         }
 

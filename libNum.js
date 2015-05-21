@@ -58,6 +58,10 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
          */
         return jsnums.lessThan(a, b) ? a : b;
     }
+    
+    function random(a, b) {
+        return Math.floor(Math.random() * (b - a + 1)) + a;
+    }
 
     function format(num, digit) {
         if (num.toString().length > digit) {

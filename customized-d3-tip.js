@@ -34,7 +34,7 @@
         firstYPos = null;
 
     function tip(vis) {
-        svg = getSVGNode(vis)
+        svg = getSVGNode(vis);
         point = svg.createSVGPoint()
 
         // Oak: we can't append a node to the body, apparently because
