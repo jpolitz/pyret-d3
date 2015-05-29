@@ -64,8 +64,10 @@ define(["d3", "js/js-numbers"], function (d3, jsnums) {
     }
 
     function format(num, digit) {
+        console.log('aaa', num.toString())
         if (num.toString().length > digit) {
             var fixnum = jsnums.toFixnum(num);
+            console.log(fixnum)
             if (fixnum.toString().length > digit) {
                 var digitRounded = digit - 1;
                 if (fixnum < 0) digitRounded--;
